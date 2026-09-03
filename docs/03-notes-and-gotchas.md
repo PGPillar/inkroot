@@ -66,6 +66,30 @@ auto-start. Root scripts can re-enable a specific app with `pm enable <package>`
   `/data/tombstones`.
 - `magisk -c` (version string) is your quick "is the daemon alive / am I rooted" check.
 
+- **Persistent ADB over Wi-Fi.** `adb tcpip 5555` does **not** survive a reboot. If you have a
+  root boot-service (see [../boot-service/](../boot-service/)), re-enable it every boot with
+  `setprop service.adb.tcp.port 5555; stop adbd; start adbd`, then `adb connect <device-ip>:5555`.
+  (If your service deep-suspends the SoC, Wi-Fi is off during suspend — the device is only
+  reachable while awake.)
+
+### 8. If you suspend the SoC, keep an RTC wake-alarm armed
+`echo mem > /sys/power/state` from a root script is a great battery win on this e-ink device
+(the panel holds its last image while the CPU sleeps). **But arm a wake source first, and keep it
+armed for the whole sleep** — write your next wake time to `/sys/class/rtc/rtc0/wakealarm`
+(`echo 0 > wakealarm; echo +<seconds> > wakealarm`) *before* you sleep, and don't clear it until
+you actually wake. If you sleep with **no** alarm armed, Android's own autosleep can suspend the
+device on battery with nothing scheduled to wake it — it then sits dead until someone presses the
+power button. Re-arm each pass so the target stays correct across early wakeups:
+```sh
+WAKE_AT=$(( $(date +%s) + INTERVAL ))
+while [ $(date +%s) -lt $WAKE_AT ]; do
+  rem=$(( WAKE_AT - $(date +%s) ))
+  echo 0 > /sys/class/rtc/rtc0/wakealarm; echo +$rem > /sys/class/rtc/rtc0/wakealarm
+  echo mem > /sys/power/state 2>/dev/null      # suspends on battery; returns immediately on charger
+  sleep 20
+done
+```
+
 ---
 
 *These are field notes, not gospel — Onyx changes things between firmware versions. Re-verify on

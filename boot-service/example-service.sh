@@ -8,6 +8,8 @@ echo "=== $(date) service start uid=$(id -u) ctx=$(cat /proc/self/attr/current 2
 #   input keyevent 224                          # wake the screen
 #   echo +1740 > /sys/class/rtc/rtc0/wakealarm   # arm an RTC wake (seconds from now)
 #   echo mem   > /sys/power/state                # suspend the SoC (blocked while charging)
+#     ^ if you do this, keep an RTC wakealarm armed the whole sleep — see ../docs/03 §8,
+#       or Android autosleep can strand the device on battery with no way to wake it.
 #   svc bluetooth enable | svc bluetooth disable # toggle radios
 #   echo 1209600 > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq  # cap CPU clock
 #   settings put secure screensaver_enabled 0    # system settings
