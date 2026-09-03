@@ -1,0 +1,12 @@
+# never commit device firmware or proprietary binaries
+*.img
+*.apk
+*.elf
+*.mbn
+*.bin
+mgk_extract/
+magisk_extract/
+# scratch
+*.log
+*.out
+.DS_Store

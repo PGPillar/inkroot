@@ -1,0 +1,5 @@
+# Magisk overlay.d init hook — bake into the patched boot at overlay.d/init.bootsvc.rc
+# Runs the magisk binary (init CAN reach /debug_ramdisk) and uses `magisk su` (auto-granted to
+# the uid-0 init caller) to install + launch your boot service as real root. See ../docs/03.
+on property:sys.boot_completed=1
+    exec u:r:magisk:s0 root root -- /debug_ramdisk/magisk su -c "cp -f /data/local/tmp/bootsvc.sh /data/adb/bootsvc.sh 2>/dev/null; chmod 0755 /data/adb/bootsvc.sh; /system/bin/sh /data/adb/bootsvc.sh"
