@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "magisk": { "version": "30.7", "file": "Magisk-v30.7.apk",
+    "url": "https://github.com/topjohnwu/Magisk/releases/download/v30.7/Magisk-v30.7.apk",
+    "sha256": "e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5" },
+  "platformTools": { "version": "37.0.1", "archives": {
+    "darwin":  { "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-darwin.zip", "sha256": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d" },
+    "linux":   { "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-linux.zip",  "sha256": "d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1" },
+    "windows": { "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip",    "sha256": "45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99" } },
+    "members": { "darwin": ["platform-tools/adb"], "linux": ["platform-tools/adb"],
+      "windows": ["platform-tools/adb.exe", "platform-tools/AdbWinApi.dll", "platform-tools/AdbWinUsbApi.dll", "platform-tools/libwinpthread-1.dll"],
+      "notice": "platform-tools/NOTICE.txt" } },
+  "edl": { "repo": "https://github.com/bkerler/edl", "commit": "2f8e89a848afaaef68997fcbcb5b178d958d497b",
+    "version": "3.62", "loadersCommit": "bf0d8017eb97464530114a348c5157a6ea6a3372",
+    "python": "3.12", "pyinstaller": "6.16.0", "libusbPackage": "1.0.30.0",
+    "buildDir": "tools/.build/{target}/edl", "manifest": "tools/.build/{target}/edl.manifest.json" },
+  "loader": { "path": "qualcomm/model_generic/SDM855LA/000a50e100000000_d40eee56f3194665_fhprg.bin",
+    "url": "https://raw.githubusercontent.com/bkerler/Loaders/bf0d8017eb97464530114a348c5157a6ea6a3372/qualcomm/model_generic/SDM855LA/000a50e100000000_d40eee56f3194665_fhprg.bin",
+    "sha256": "7d85aafd5fc0872c12e61a0a480ca4c1042095a129278225de893b23444605ea", "size": 682616 },
+  "libwdi": { "tag": "v1.5.1", "commit": "9b23b82a2dd1cbffc16d46c212f92c6bf8c0c602",
+    "wdkRedist": { "url": "https://download.microsoft.com/download/0/5/F/05FD6919-6250-425B-86ED-9B095E54065A/wdfcoinstaller.msi", "sha256": "29314207814ce9d5d73695f7e9239539cf37c79e750b9d5ea5a5ef5487a583d6" },
+    "build": "tools/.build/windows-x86_64/wdi-simple.exe" },
+  "bootService": { "files": ["boot-service/init.bootsvc.rc", "boot-service/bootsvc.sh", "boot-service/inkroot-default-service.sh"] }
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a Magisk-patched boot with the boot-service init hook baked in, then flash it over EDL.
 # Usage: ./build-and-flash.sh <Magisk.apk> <stock-boot.img> <boot-partition>
-#   e.g. ./build-and-flash.sh Magisk-v30.1.apk boot_b.stock.img boot_b
+#   e.g. ./build-and-flash.sh Magisk-v30.7.apk boot_b.stock.img boot_b
 # Requires: adb (device booted with USB debugging), and `edl` on PATH for the flash step.
 set -euo pipefail
 APK=${1:?Magisk apk}; STOCK=${2:?stock boot image}; PART=${3:?boot partition, e.g. boot_b}

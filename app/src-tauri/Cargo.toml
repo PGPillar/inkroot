@@ -1,0 +1,48 @@
+[package]
+name = "inkroot"
+version = "0.1.0"
+description = "Back up, root and rescue the ONYX BOOX Note Max"
+authors = ["Inkroot contributors"]
+license = "MIT"
+repository = ""
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "inkroot_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = ["demo"]
+demo = []
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3"
+sha2 = "0.10"
+hex = "0.4"
+zip = "2"
+nusb = "0.1"
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+thiserror = "2"
+dirs = "5"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Power", "Win32_UI_Shell", "Win32_Foundation", "Win32_System_Threading", "Win32_System_Registry"] }
+
+[dev-dependencies]
+tempfile = "3"
+tauri = { version = "2", features = ["test"] }

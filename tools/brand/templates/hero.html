@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inkroot hero</title>
+<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="scene.css">
+<style>
+  body { width: 1600px; height: 560px; overflow: hidden; }
+  .canvas { width: 1600px; height: 560px; }
+  .copy { margin-left: 88px; width: 860px; }
+  .copy h1 { font-size: 66px; margin: 34px 0 26px; }
+  .copy .label { font-size: 15px; }
+  .copy .chip { margin-top: 30px; font-size: 14px; }
+  .tablet { font-size: 15.5px; right: 96px; top: 50%; transform: translateY(-50%); }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="titlebar"><i></i><i></i><i></i></div>
+  <div class="stage">
+    <div class="field dither" data-field></div>
+    <div class="copy">
+      <img class="wordmark" data-wordmark alt="Inkroot">
+      <h1 class="h">One-click root &amp; rescue<br>for the BOOX Note&nbsp;Max</h1>
+      <div class="label">Magisk root · EDL un-brick · Mac / Windows / Linux</div>
+      <span class="chip" data-dot>Note Max / FW 4.2</span>
+    </div>
+    <div data-tablet></div>
+  </div>
+</div>
+<script type="module">
+  import { mount } from './scene.mjs';
+  mount();
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.decode()));
+  document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

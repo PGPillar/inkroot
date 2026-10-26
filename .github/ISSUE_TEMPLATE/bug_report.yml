@@ -1,0 +1,77 @@
+name: Bug report
+description: Something went wrong while using Inkroot
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Inkroot is community software provided as-is, with no warranty. If your tablet won't start, first read the [rescue guide](https://n0dal.github.io/inkroot/rescue/).
+  - type: input
+    id: version
+    attributes:
+      label: Inkroot version
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Your computer
+      options:
+        - macOS — Apple Silicon
+        - macOS — Intel
+        - Windows 10/11
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: Operating system version
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      value: BOOX Note Max
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: "Settings → About: firmware version, e.g. 4.2 / TKQ1.230721.002"
+    validations:
+      required: true
+  - type: dropdown
+    id: job
+    attributes:
+      label: What were you doing?
+      options:
+        - Back up
+        - Import a backup
+        - Root
+        - Rescue
+        - Return to stock
+        - Other
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: In Inkroot open **Details → Copy log** and paste it here. You may remove your tablet's serial number.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: asis
+    attributes:
+      label: As-is
+      options:
+        - label: I understand Inkroot is provided as-is, with no warranty, and that I use it at my own risk.
+          required: true

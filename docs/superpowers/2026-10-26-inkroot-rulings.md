@@ -1,0 +1,107 @@
+# Inkroot — decisions made during the build
+
+Every judgment call the coordinator and track controllers made on the owner's behalf, with what it costs if wrong. Owner decisions are marked.
+
+## Release + web track
+- Ruling: execute Tasks 1–8 now; Tasks 9–10 wait until app-core scaffolding (app/, tauri.conf.json) exists on this branch — plan dependency map says so — cost if wrong: none, only ordering.
+- Ruling: accept plan's extra staged files (tools/libwinpthread-1.dll on Windows, legal/) beyond the contract layout — adb r37 on Windows needs the DLL; legal/ feeds the About screen — cost if wrong: app-core ignores extra files, harmless.
+- Ruling: two macOS DMGs (arm64 + x86_64), not universal — pylzma has no universal2 wheel (plan finding) — cost if wrong: one extra download button.
+- ## Rulings on pre-flight findings
+- Ruling F1 (T3/T6): stage replaces the CONTENTS of app/src-tauri/resources/ but preserves resources/README.md (stage into temp dir, then move each top-level entry in); .gitignore uses `app/src-tauri/resources/*` + `!app/src-tauri/resources/README.md` — keeps app-core's stub — cost if wrong: one README file churn.
+- Ruling F2 (T3,T5): tests that assert nothing get real assertions — T5 "init survives a failed fetch" asserts static fallback hrefs remain; T3 "dark wordmark inverts colours" asserts the dark SVG's fill for the wordmark glyphs is the panel colour and its background is ink (compare to light variant) — cost if wrong: none.
+- Ruling F3 (T6): staging does all downloads first, then checks edl build, then boot-service files, collecting ALL problems and reporting them together, exit non-zero — cost if wrong: none.
+- Ruling F4 (T6): default --out resolves relative to the script file (../app/src-tauri/resources); resolveTarget precedence: explicit --target flag > TAURI_ENV_PLATFORM/ARCH > host — cost if wrong: minor.
+- Ruling F5 (T6/T8): signing runs inside the temp staging dir before the move; teamId from env APPLE_TEAM_ID; entitlements applied only to edl's main executable (PyInstaller needs disable-library-validation), defined in tools/macos/entitlements.edl.plist; signing skipped (with a log line) when APPLE_SIGNING_IDENTITY is unset — cost if wrong: notarization retry.
+- Ruling F6 (T10): upload-artifact uses include-hidden-files: true; codesign the DMG before notarytool submit; version check covers app/package.json, tauri.conf.json AND Cargo.toml — cost if wrong: failed release run.
+- Ruling F7 (T4): README rewrite replaces the 60-second version lines that mention 30.x/30.1 with 30.7 — the docs-fix constraint wins over "keep" — cost if wrong: none.
+- Ruling F8 (T1/T7): T1 lists components from the spec + plan (incl. libusb, libwinpthread-1.dll); T7 re-confirms against the build venv and amends THIRD_PARTY_NOTICES.md if needed — cost if wrong: one doc edit.
+- Ruling F9 (T9): deferred to after app-core; at that time the T9 dispatch will carry app-core's actual dist/icon state; T9 may overwrite app/src-tauri/icons/* with brand icons (brand assets supersede scaffold icons) — cost if wrong: icon churn.
+- Ruling F10: Developer ID signature necessarily shows the certificate holder's name; the owner chose Developer ID signing, so proceed; the "never use legal name" constraint applies to repo text only; surfaced to owner — cost if wrong: owner may prefer an org/team cert name; changing it later is a cert swap, no code change.
+- Ruling F11 minors: define ONE_LINE_DISCLAIMER and stable asset names once in tools/lib/constants.mjs and import everywhere (T5/T8/T10); site icon links use root-relative paths with the /inkroot/ base; build.mjs copies .htmlvalidate.json into _site or html-validate runs with --config; detectOS tests use full real UA strings and real platform values ('MacIntel'); build-wdi.sh prints the actual hash when lock says FILL_IN; T2 uses explicit git add of its files; T8 codesign test skips when offline/no codesign — cost if wrong: minor.
+- Ruling: README gets a one-line 'beta — not yet hardware-verified' note near the download buttons — global constraint forbids implying hardware verification — cost if wrong: one line to remove after owner's test pass.
+- Ruling: keep data-primary highlight on detected OS even when GitHub API fails — OS detection is offline and helps most when rate-limited — cost if wrong: one highlighted button.
+- Ruling: escalate Task 6 minors #1 (staged edl copy unverified), #2 (symlinks in onedir), #3 (signer dynamic import), #4 (copy-phase errors bypass F3; rollback failure deletes backup) to a fix round now — Tasks 7/8 build directly on them and they're integrity/safety paths — cost if wrong: one extra fix round.
+- Ruling: edl entitlements keep BOTH disable-library-validation (F5, PyInstaller loads _internal libs) and allow-unsigned-executable-memory (brief, libffi) — notarization rejects neither and both are needed for frozen Python — cost if wrong: drop a key after first real notarization run.
+- Ruling: fix plan-mandated no-op docs grep in ci.yml (grep && exit 1 || true never fails) — a check that cannot fail is a defect regardless of plan text — cost if wrong: none.
+- Ruling: accept Task 10 deviations — edl artifact as tar (preserves exec bits + symlinks), bundled-edl libusb smoke test, early Apple-secrets check, release left as draft for owner to publish (owner reviews before going public) — cost if wrong: one manual Publish click per release.
+- Ruling: final whole-branch review scoped to release-web commits + integration seams (merges a3a7abf/eb51ff0, cross-track contracts) — app-core and app-ui each already passed their own final whole-branch reviews on their branches — cost if wrong: an engine/UI-internal issue missed here (they were reviewed separately).
+
+## App engine track
+- Ruling: cable answer skipped only when hasRescueCable == true; a prior "continue without" asks again — safer — cost: one extra prompt.
+- Ruling: `magiskboot cpio test` exit 1 and 2 = not stock; others = error — cost: an exotic exit code becomes an internal error.
+- Ruling: import with no device and no known hash = Rescue-only under serial `unassigned` — cost: user must re-import with device to root.
+- Ruling: reinstall's switch to root re-checks the risk notice — cost: none.
+- Ruling: wdi-simple flags and udev rule confirmed against real tools by implementer (recorded in report) — cost: driver install may need flag fix on hardware.
+- R1 Ruling: Task 1 appends only the missing lines (app/node_modules/, app/dist/, app/src-tauri/target/, app/src-tauri/gen/) to the existing .gitignore; resources lines already present are kept, not duplicated — plan assumed no .gitignore — cost if wrong: none.
+- R2 Ruling: Task 1 also registers tauri-plugin-opener + tauri-plugin-dialog in run() and writes the full Task 14 capability list (core:default, dialog:allow-open, opener:allow-open-url, opener:allow-reveal-item-in-dir, core:window:allow-close, core:window:allow-destroy); package.json deps also get @tauri-apps/plugin-opener@^2 — the UI track forks from the Task 1 commit and needs them — cost if wrong: Task 14 merely re-verifies; trivially revertible.
+- R3 Ruling: Task 1 Step 6 smoke-run is replaced by `cargo build` + `npm run build` (+ optional bounded `tauri dev` launch with timeout, no GUI assertion) — subagent cannot observe a window — cost: a runtime-only window issue surfaces later at Task 14/coordinator smoke.
+- R4 Ruling: generate app icons with `npx tauri icon ../assets/icon/inkroot-icon-1024.png` (repo's brand icon) instead of the default Tauri logo — spec §6 wants an original mark — cost: none.
+- R5 Ruling: multiple test filters are run as `cargo test -- f1 f2` (libtest accepts many filters) or separate invocations — cargo rejects several positional TESTNAMEs — cost: none.
+- R6 Ruling: env-var-mutating tests (INKROOT_TOOLS_DIR, INKROOT_BACKUP_DIR, INKROOT_CONFIG_DIR, INKROOT_DEMO*) share one crate-level `#[cfg(test)] pub(crate) fn env_lock() -> MutexGuard` (created in Task 4, reused later) — per-module mutexes don't serialise across modules — cost: none.
+- R7 Ruling: Task 7's tests/support/mod.rs provides test_profile, stock_world, RecordingEmitter (+ fixture helpers); `harness`/`Harness`/`run_to_end` are added in Task 9 when FlowEngine exists — ordering defect — cost: none.
+- R8 Ruling: FakeHost and FakeAwake (and HostSetup/KeepAwake impls) are added to fakes.rs in Task 8; Task 7 declares the Call::DriverInstall/UdevInstall variants only — traits don't exist until Task 8 — cost: none.
+- R9 Ruling: Task 7 adds `Faults.patch_drops_marker: bool` (fake PATCH_CMD writes the image without the INKROOT-PATCHED marker → boots unrooted) for Task 11's root_verify_failure — plan names the behaviour but no field — cost: none.
+- R10 Ruling: Poller::spawn signature as planned; it probes with `Timeouts::default()` unless the implementer adds a `timeouts` param (either acceptable) — cost: none.
+- R11 Ruling: FlowEngine exposes `#[doc(hidden)] pub fn start_with(&self, kind, opts, flow: fn/Box<dyn FnOnce(&FlowCtx)->Result<FlowResult,FlowEnd>+Send>)` sharing all of start()'s gates; flows::common step fns are `pub` so tests/engine.rs can compose test-only flows — integration tests see only pub API — cost: slightly wider API surface.
+- R12 Ruling: check_device maps DeviceStatus::Edl → FlowError noDevice with suggestedAction goToRescue and a plain message ("Your tablet is in rescue mode…") — plan omits the case — cost: copy tweak only.
+- R13 Ruling: take_backup starts with library.create_dir (before any edl/adb reboot) then enterEdl/readPartitions/verifyBackup; run_backup = step(checkDevice)+check_device+take_backup, so create_dir still happens inside the checkDevice step (Review Focus 4) — cost: none.
+- R14 Ruling: import with no device uses serial "unassigned" whether or not the hash is known (known hash → stock:true, firmware from profile entry); stock_for stays strict on serial, so root/unroot need an import done with the tablet connected — spec §3.1 "verified stock backup for the connected serial" — cost: user may need to re-import with device plugged in.
+- R15 Ruling: when root writes patched-boot.img it sets manifest.patched AND appends a BackupFile{name:"patched-boot.img",size,sha256} to manifest.files so BackupSummary.files lists it (contract) — cost: none.
+- R16 Ruling: Deps gains `magisk_apk_sha256: String`; production wiring (Task 14) sets it to the MAGISK_APK_SHA256 constant; tests/demo pass the sha of a fixture APK zip. Not reachable from settings/env/UI — fakes cannot match the real pin — cost: a wiring bug could bypass the pin; Task 14 test asserts real deps use the constant.
+- R17 Ruling: rescue makes no adb calls at all (step 4 "done" right after reset; no adb watch) — spec says optional; test rescue_never_calls_adb is binding — cost: no "tablet is back" celebration in v1 backend.
+- R18 Ruling: rescue's verify scratch dir = backup dir for library backups, a fresh tempdir for loose files — user's file folder may be read-only — cost: none.
+- R19 Ruling: reinstall hook-absent path runs tools.require_for(Root) and risk check before set_kind(Root); root_from_step2 on a rooted device with no stock backup fails noStockBackup/importBackup immediately (no pointless EDL backup that could only be non-stock) — cost: none.
+- R20 Ruling: rescue from a library backup writes `boot_<slot>.img` from that backup to `boot_<slot>`; if that file isn't in the manifest → badImage — cost: an imported single-slot backup can't be written to the other slot.
+- R21 Ruling: demo settings use SettingsStore on a temp file under the demo temp dir (pre-accepted risk not assumed) — "in memory" intent = nothing persisted to the real config — cost: none.
+- R22 Ruling: demo_deps creates a temp ToolPaths root with stub files for every require_for path plus a fixture Magisk APK zip (sha passed via R16) — cost: none.
+- R23 Ruling: fake PATCH_CMD overwrites the image's last 15 bytes with INKROOT-PATCHED instead of appending — appending changes size and fails validate_boot_image(boot_size) — cost: none (fake only).
+- R24 Ruling: (amends R10) Poller waits between polls in REAL time with a Condvar wait_timeout (wakeable by stop/resume) and its spawn signature drops the `clock` param — a FakeClock-driven sleep hot-loops and advances shared virtual time — cost: Task 14 signature differs from plan text (trivial).
+- R25 Ruling: an unparseable/missing ro.boot.slot_suffix yields gate UnknownFirmware (contract has no slot gate; DeviceInfo.slot placeholder A is never trusted because gated flows stop) — never guess a boot slot — cost: a device with odd slot prop is blocked (safe).
+- R26 Ruling: promote two Task 7 minors into fix round 1 because downstream safety tests depend on them: verify_read_differs flips a middle byte (not magic byte 0) on every read after the first of that partition; FakeEdl ops fail with Timeout{tool:"edl"} when edl_never_appears — cost: none.
+- R27 Ruling: promote Task 9 minors #1 (start() holds engine lock across Poller::pause → close guard writing() could block), #2 (spawn failure leaves a running snapshot), #9 (no test pins "poller paused while flow active") into one fix round — #1 is load-bearing for Task 14's close guard, #9 pins a Global Constraint — cost: one extra fix round.
+- R28 Ruling: backup read-back mismatch fails verifyFailed (suggestedAction retry), best-effort reset (nothing written), no verified manifest; backup read error fails edlTimeout/reconnect with no manifest written — plan leaves the verify-mismatch code unspecified — cost: copy/code tweak only.
+- R29 Ruling: Root's "Safety copy" group emits the backup sub-steps' StepIds (enterEdl/readPartitions/verifyBackup) at fixed stepIndex 2 of 4 — contract says group 2 "runs the backup sub-flow"; UI renders StepId within the group — cost: UI copy mapping only.
+- R30 Ruling: BackupLibrary::stock_for additionally requires `m.slot == slot` (applies to Root and Unroot) — stock evidence covers only the slot active at backup time — cost: after a slot change the user must take/import a new backup.
+- R31 Ruling: promote Task 11 minor "bootsvc `before` count reads 0 on adb error → false fresh-line pass on already-rooted reinstall→root path" into this fix round: the `before` read must retry and, if still unreadable, fail (internal, plain message) rather than assume 0 when the file read errored (missing file = 0 is fine) — load-bearing for Task 12 — cost: one more failure mode on a flaky cable.
+- R32 Ruling: unroot has no cableCheck prompt — spec §3.4/contract list none; cable check is a Root step — cost: an unroot that goes wrong may surprise a user without a deep-flash cable.
+- R33 Ruling: Root and Unroot honour opts.backup_id when given: library.get(id) must be stock && verified && serial == device serial && firmware.display_id == device display_id && slot == active slot, else noStockBackup/importBackup; absent → stock_for as now — contract is binding, plan omitted it — cost: one extra fix round.
+- R34 Ruling: promote Task 12 minors #1 (reinstall push errors → same plain "couldn't copy files… check the cable" + reconnect as root) and #3 (unroot .expect in flow path → error) into the same fix round — cheap, user-facing/panic safety — cost: none.
+- R35 Ruling: promote Task 14 minors #1 (reveal_path passes \\?\ canonical path to Explorer on Windows — use canonical only for containment, reveal original or dunce-style) and #2 (env set_var in tests/commands.rs races other tests in same binary → move to its own test file) into fix round 1 — user-facing on Windows / UB in tests — cost: none.
+- R36 Ruling: accept that macOS Dock Quit, logout/shutdown and force-quit cannot be blocked mid-write (tao 0.37 has no applicationShouldTerminate hook); Cmd+Q / menu Quit / window close / app.exit are guarded via a custom Quit item + ExitRequested — cost: a user quitting from the Dock mid-write could interrupt a boot write (Rescue recovers it); revisit if tao adds the hook.
+- R37 Ruling: final fix wave covers Critical 1, Important 1, 2, 4, the reviewer's must-fix triage (Task 6 default-service header wording; Task 12 negative backupId tests) and cheap safety minors (validate requires PATCHVBMETAFLAG=false & RECOVERYMODE=false; check EDL device present before each write attempt; unauthorized tablet + authorized phone → Unauthorized; sanitize serial path segment) — cost: one fix wave.
+- R38 Ruling: park final Important #3 (imported image firmware unverifiable by magiskboot test; known hash 1aeb… may be previous-OTA boot_a) for the OWNER — needs owner data (which firmware 1aeb… is) and a product decision (os_patch_level check / prefer fresh backup); not fixable by guesswork — cost if wrong: an old-firmware stock image imported under a 4.2 label could be patched and flashed (bootloop; Rescue with same image can't fix). Must be resolved before public release.
+- R39 Ruling: getprop output is logged as parsed fields, not raw line-by-line (deviates from Global Constraint 'stdout line by line into the log' for that one command) — 1000-line getprop every probe evicted flow logs — cost: raw props absent from Copy log (parsed fields present).
+- R40 Ruling: keep the SDD workspace (gitignored) until the coordinator integrates tracks, instead of deleting it now — the coordinator may resume/audit — cost: a few MB of scratch files.
+- R41 Ruling: for Inkroot's own backups the known-hash shortcut also requires the structured entry's slot + displayId to match (else falls through to the magiskboot test as before) — one consistent matcher — cost: none (falls back to the existing test).
+- R42 Ruling (UI-track request via coordinator): capabilities get a scoped opener:allow-open-url allow list for https://github.com/n0dal/inkroot/* and https://n0dal.github.io/inkroot/* (not blanket default URLs); .gitignore adds app/test-results/ — separate small sonnet dispatch after the owner-R38 implementer finishes (no parallel implementers) — cost: none.
+- R43 Ruling: accept implementer's extra validate rule (a known-stock entry's displayId must exist in the profile's firmware list) — needed to file firmware for no-tablet matches — cost: none.
+- R44 Ruling: no legacy trust — when selecting a backup for Root/Unroot (stock_for and explicit backupId), an IMPORTED manifest counts only if stock_evidence == KnownHash AND the current profile matcher still matches its boot_<slot> sha/slot/displayId; older imports (magiskboot-test or 1aeb) become Rescue-only automatically — cost: an owner who imported before this build must re-import (harmless).
+- R42 folded into the same follow-up dispatch (same implementer, sequential).
+- R45 Ruling: accept spec edits beyond §3.1b (§2, §3.1, §5) — consistency with the owner ruling — cost: none.
+
+## App screens track
+- R1: Plex font packages are devDependencies — cost: move two lines.
+- R2: copy.ts started in Task 2 with FALLBACK_ERROR_MESSAGE — trivial.
+- R3: listBackups(undefined) sends {} — trivial.
+- R4: risk notice pre-accepted in demo failure scenarios (only no-backup and device-gate scenarios leave it unset) — those demos skip the risk screen.
+- R5: App.svelte only boots; UI lives in lib/Shell.svelte — one extra file.
+- R6: strings missing from the plan's copy tables added verbatim to copy.ts — none.
+- R7: progress caption shows bytes when total ≥ 1024, else steps — caption format.
+- R8: illustration file names follow Task 7 (DitherDefs, MenuSketch) — none.
+- R9: danger options always ordered last, never first in tab order — a danger button may sit away from the backend's order.
+- R10: e2e spec builds its output path ESM-style — none.
+- R11: "keep open" flag lets the USB guide stay open from Home while connected — that guide doesn't auto-close.
+- R12/R13: "Return to stock" (Already rooted screen and Home Stock card) disabled when no original copy exists — user never sees the backend's own failure message.
+- R14: no "Method A not yet verified" caveat in the in-app guide; the "I can't find it" path covers it — one extra panel for some users.
+- R15: Rescue picker never auto-selects a backup without a known tablet serial — one extra click.
+- R16: PromptView layout fixed inside Task 11's review loop — blurred task boundary in history.
+- R17: two reviewer minors promoted to fixes (cable art step 5 shows both buttons held; close warning clears once writing ends) — one extra fix round.
+- R18: final fix wave also fixed startup device-status race, unhandled promise rejections, "found" based on flow step, slot-regex boundary, startup-failure line — larger diff.
+- R19: dark-mode muted colour #A0A19C kept per plan token table — one token.
+- R20: no extra confirmation before Unroot (Stock) beyond the risk notice — one click starts a reversible write. Owner may want a confirm.
+
+## Owner decisions (2026-10-25/26)
+- Name Inkroot; repo renamed to n0dal/inkroot; Panel visual style; bundle all binaries; macOS Developer ID + notarization, Windows unsigned, Linux AppImage; boot service always baked in; Magisk 30.7.
+- Rescue-cable warning before Root with deliberate "continue without" confirmation.
+- Imports: known files only — an imported image is usable for Root/Unroot only if its SHA-256 matches a verified {sha256, slot, firmware} entry (currently only boot_b 2f05dc1b… on TKQ1.230721.002); boot_a 1aeb… removed; anything else is Rescue-only.
+- Legal layer: DISCLAIMER.md, in-app risk acknowledgement, not-affiliated wording, privacy statement.

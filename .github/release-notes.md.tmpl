@@ -1,0 +1,32 @@
+## Inkroot {{version}}
+
+> {{disclaimer}}
+
+### Download
+
+| Your computer | Download |
+|---|---|
+| Mac with Apple Silicon (M1 and newer) | **{{mac-arm}}** |
+| Mac with Intel | **{{mac-intel}}** |
+| Windows 10/11 (64-bit) | **{{windows}}** |
+| Linux (x86_64, AppImage) | **{{linux}}** |
+
+Windows may say *Windows protected your PC*: click **More info → Run anyway** (Inkroot isn't code-signed on Windows). On Linux, make the AppImage executable first: `chmod +x {{linux}}`.
+
+### Status
+
+{{status}}
+
+### What's inside
+
+- Magisk {{magiskVersion}}
+- edl commit `{{edlCommit}}` (client {{edlVersion}})
+- Google platform-tools r{{platformTools}}
+
+### Verify your download
+
+Download `SHA256SUMS.txt` next to your installer, then run `shasum -a 256 -c --ignore-missing SHA256SUMS.txt` (Windows: `certutil -hashfile <file> SHA256`).
+
+### Source and licenses
+
+Bundled third-party tools and the GPL source offer are listed in [THIRD_PARTY_NOTICES.md](https://github.com/n0dal/inkroot/blob/main/THIRD_PARTY_NOTICES.md).

@@ -1,0 +1,55 @@
+/* Inkroot "Panel" design tokens. Every component uses only these.
+   Palette is three values; dark mode is the exact inverse. */
+:root {
+  color-scheme: light dark;
+
+  /* colour */
+  --panel: #E8E9E4;
+  --ink: #111111;
+  --muted: #555555;
+
+  /* lines */
+  --border: 2px solid var(--ink);
+  --border-heavy: 4px solid var(--ink);
+
+  /* dither (the only gradients allowed) */
+  --dither-3: repeating-conic-gradient(currentColor 0 25%, transparent 0 50%) 0 0/3px 3px;
+  --dither-4: repeating-conic-gradient(var(--ink) 0 25%, transparent 0 50%) 0 0/4px 4px;
+
+  /* type families (bundled locally via @fontsource) */
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* type scale: `font` shorthands plus their companion properties */
+  --fs-display: 600 32px/1.1 var(--font-sans);
+  --track-display: -0.02em;
+  --fs-heading: 600 28px/1.12 var(--font-sans);
+  --track-heading: -0.01em;
+  --fs-body: 400 16px/1.5 var(--font-sans);
+  --fs-instruction: 600 22px/1.25 var(--font-sans);
+  --fs-label: 500 12px/1 var(--font-mono);
+  --track-label: .12em;
+  --opacity-label: .55;
+  --fs-meta: 400 13px/1.4 var(--font-mono);
+  --fs-chip: 500 12px/1 var(--font-mono);
+  --pad-chip: 5px 9px;
+  --fs-wordmark: 600 16px/1 var(--font-mono);
+  --track-wordmark: .02em;
+
+  /* spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --gutter: 28px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel: #111111;
+    --ink: #E8E9E4;
+    --muted: #A0A19C;
+  }
+}

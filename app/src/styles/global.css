@@ -1,0 +1,17 @@
+/* Inkroot global rules: reset, base type, focus, selection, e-ink refresh. */
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+
+body{background:var(--panel);color:var(--ink);font:var(--fs-body)}
+
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+::selection{background:var(--ink);color:var(--panel)}
+
+/* E-ink refresh: keyframes copied verbatim from the approved mockup. */
+.flash{animation:eink .52s steps(1,end)}
+@keyframes eink{0%{filter:invert(1) contrast(3)}30%{filter:brightness(0)}55%{filter:brightness(3) grayscale(1)}80%{filter:none}}
+
+@media (prefers-reduced-motion: reduce){.flash,.marching{animation:none}}
+
+/* Inline text link (a <button> that reads as a link): underlined, ink, no box. */
+.textlink{background:none;border:0;padding:2px 0;color:inherit;font:500 14px var(--font-sans);text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}

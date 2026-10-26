@@ -1,0 +1,28 @@
+{
+  "id": "note-max",
+  "displayName": "Note Max",
+  "match": { "model": "NoteMax", "device": "NoteMax", "manufacturer": "ONYX" },
+  "firmware": [
+    {
+      "buildId": "TKQ1.230721.002",
+      "displayId": "TKQ1.230721.002",
+      "incremental": "226",
+      "fingerprint": "ONYX/TabBoox/TabBoox:13/TKQ1.230615.001/GV2.027.SQ83A:user/release-keys",
+      "label": "4.2"
+    }
+  ],
+  "soc": "SM8150",
+  "storage": "ufs",
+  "partitions": { "bootA": "boot_a", "bootB": "boot_b", "vbmetaA": "vbmeta_a", "vbmetaB": "vbmeta_b" },
+  "bootSize": 100663296,
+  "edl": { "loader": "qualcomm/model_generic/SDM855LA/000a50e100000000_d40eee56f3194665_fhprg.bin" },
+  "magisk": {
+    "version": "30.7",
+    "patchEnv": { "KEEPVERITY": true, "KEEPFORCEENCRYPT": true, "PATCHVBMETAFLAG": false, "RECOVERYMODE": false }
+  },
+  "bakeBootService": true,
+  "cableGuideNotes": ["Plain power-button restart does not reach EDL on this model; use the deep-flash cable."],
+  "knownStockBootSha256": [
+    { "sha256": "2f05dc1bb3d6df0da5e5267cfc7ff1f52e568f43c9ff09d0ee04aa97b9b0c8fc", "slot": "b", "displayId": "TKQ1.230721.002" }
+  ]
+}

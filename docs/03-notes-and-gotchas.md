@@ -1,5 +1,7 @@
 # 03 · Notes & gotchas (the things that cost us days)
 
+> **Easiest: use the [Inkroot app](https://github.com/n0dal/inkroot#download).** It does every step in this guide for you, with checks at each step. This guide is the manual path for tinkerers.
+
 Onyx's Android 13 on the Note Max deviates from stock in ways that quietly break the normal root
 workflow. If you're rooting this device — or debugging why "my Magisk boot script never runs" —
 read this. Everything below is observed behaviour on firmware **v4.2 (`TKQ1.230721.002`)**.
@@ -60,7 +62,7 @@ Onyx's power manager (`ApplicationFreezeHelper`) **freezes third-party apps** (`
 auto-start. Root scripts can re-enable a specific app with `pm enable <package>`.
 
 ## 7. Small practical notes
-- Enable **USB debugging** via Onyx's "USB Debug Mode" toggle (Developer options).
+- **USB debugging:** Onyx hides Android's usual "tap Build number" route. See the two methods in [01 · What you need](01-rooting.md#what-you-need).
 - Find the active slot: `adb shell getprop ro.boot.slot_suffix` → flash `boot_<suffix>`.
 - Inspect boot behaviour with `adb shell 'logcat -b all -d | grep -i init'` and tombstones under
   `/data/tombstones`.

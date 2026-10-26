@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: My tablet is stuck on the ONYX logo
+    url: https://n0dal.github.io/inkroot/rescue/
+    about: Step-by-step rescue guide
+  - name: Manual guides (adb / EDL)
+    url: https://github.com/n0dal/inkroot/tree/main/docs
+    about: Do it by hand, without the app

@@ -1,5 +1,7 @@
 # 02 · Un-brick / recover over Qualcomm EDL
 
+> **Easiest: use the [Inkroot app](https://github.com/n0dal/inkroot#download).** It does every step in this guide for you, with checks at each step. This guide is the manual path for tinkerers.
+
 **Your BOOX is stuck on the ONYX logo, bootlooping, or dead after a `boot` flash? It's almost
 certainly recoverable.** The SoC drops into Qualcomm's **Emergency Download mode (EDL / 9008)**,
 and from there you write a good `boot` image back. Verified end-to-end on the Note Max (SDM855).
@@ -23,9 +25,14 @@ cable will **not** force EDL.
 > never sees the `9008` device. On a MacBook with no USB-A port, use a desktop/mini-PC/NUC/server
 > with real USB-A ports. (We recovered ours from a Linux host's onboard USB-A.)
 
+> [!NOTE]
+> **Backing up or flashing a tablet that still boots doesn't need the deep-flash cable or USB-A.** Enter EDL with `adb reboot edl` and a normal USB-C cable works, including straight into a Mac (verified: our stock backup was read this way from macOS). The native-USB-A rule above is for the **deep-flash cable** method.
+
 ## Install the EDL tool
 
 Open-source client: **[bkerler/edl](https://github.com/bkerler/edl)**.
+
+**Tested with:** `bkerler/edl` commit `2f8e89a848afaaef68997fcbcb5b178d958d497b` (client 3.62), Loaders submodule `bf0d8017eb97464530114a348c5157a6ea6a3372`. With no loader given it detected `SM8150`, HWID `0x000a50e100000000`, and picked `Loaders/qualcomm/model_generic/SDM855LA/000a50e100000000_d40eee56f3194665_fhprg.bin`. To use exactly that: `git checkout 2f8e89a8 && git submodule update`, and pass `--loader=Loaders/qualcomm/model_generic/SDM855LA/000a50e100000000_d40eee56f3194665_fhprg.bin`.
 
 ```bash
 git clone --recursive https://github.com/bkerler/edl

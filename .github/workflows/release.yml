@@ -1,0 +1,409 @@
+name: release
+
+# Builds, signs and uploads Inkroot for every OS when a version tag is pushed.
+# Owner guide (secrets, cutting a release, first-run checklist): docs/RELEASING.md
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release, e.g. v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Tag matches the app version
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag $TAG is not of the form vX.Y.Z"; exit 1
+          fi
+          want="${TAG#v}"
+          conf="$(jq -r .version app/src-tauri/tauri.conf.json)"
+          pkg="$(jq -r .version app/package.json)"
+          cargo="$(sed -n '/^\[package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' app/src-tauri/Cargo.toml | head -n1)"
+          bad=0
+          for pair in "app/src-tauri/tauri.conf.json=$conf" "app/package.json=$pkg" "app/src-tauri/Cargo.toml=$cargo"; do
+            file="${pair%%=*}"; ver="${pair#*=}"
+            if [ "$ver" != "$want" ]; then
+              echo "::error file=$file::tag $TAG ≠ app version $ver ($file)"; bad=1
+            fi
+          done
+          [ "$bad" = 0 ] && echo "version $want matches tauri.conf.json, package.json and Cargo.toml"
+          exit "$bad"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci --prefix tools
+      - name: Render release notes
+        run: node tools/render-release-notes.mjs "$TAG" > notes.md && cat notes.md
+      - name: Create the draft release
+        run: |
+          # Not --prerelease: /releases/latest/download/... only resolves to a published, non-prerelease
+          # release, so "beta" is stated in the notes instead.
+          if gh release view "$TAG" --json isDraft >/dev/null 2>&1; then
+            if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" != "true" ]; then
+              echo "::error::release $TAG is already published; bump the version instead of re-releasing"; exit 1
+            fi
+            echo "draft $TAG already exists (re-run); refreshing its notes"
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" --verify-tag --draft --title "Inkroot $TAG" --notes-file notes.md
+          fi
+
+  build-edl:
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: darwin-aarch64
+          - os: macos-15-intel
+            target: darwin-x86_64
+          - os: windows-latest
+            target: windows-x86_64
+          # ubuntu-22.04 sets the glibc floor for the AppImage.
+          - os: ubuntu-22.04
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      # Builds the onedir and runs its self-test ("libusb OK …") and `edl --help`.
+      - run: python -I tools/build_edl.py --target ${{ matrix.target }}
+      # Artifacts drop exec bits and symlinks, so the onedir travels as a tar.
+      - name: Pack edl build
+        run: tar -C tools/.build -cf tools/.build/edl-${{ matrix.target }}.tar ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edl-${{ matrix.target }}
+          path: tools/.build/edl-${{ matrix.target }}.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  build-wdi:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          # inherit: build-wdi.sh needs node (from setup-node) on PATH.
+          path-type: inherit
+          update: true
+          install: mingw-w64-x86_64-toolchain base-devel autotools git
+      # Extracts the WDK redistributable (asserts WdfCoInstaller01011.dll), builds, runs `wdi-simple --help`.
+      - run: bash tools/build-wdi.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdi-windows-x86_64
+          path: tools/.build/windows-x86_64/wdi-simple.exe
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  bundle:
+    needs: [prepare, build-edl, build-wdi]
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: darwin-aarch64
+            rust-target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin --bundles app,dmg
+            bundle-dir: app/src-tauri/target/aarch64-apple-darwin/release/bundle
+            glob: dmg/*.dmg
+            asset: mac-arm  # key of RELEASE_ASSETS in tools/lib/constants.mjs (Inkroot-macOS-AppleSilicon.dmg)
+          - os: macos-15-intel
+            target: darwin-x86_64
+            rust-target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin --bundles app,dmg
+            bundle-dir: app/src-tauri/target/x86_64-apple-darwin/release/bundle
+            glob: dmg/*.dmg
+            asset: mac-intel  # key of RELEASE_ASSETS in tools/lib/constants.mjs (Inkroot-macOS-Intel.dmg)
+          - os: windows-latest
+            target: windows-x86_64
+            rust-target: x86_64-pc-windows-msvc
+            args: --bundles nsis
+            bundle-dir: app/src-tauri/target/release/bundle
+            glob: nsis/*-setup.exe
+            asset: windows  # key of RELEASE_ASSETS in tools/lib/constants.mjs (Inkroot-Windows-x64-setup.exe)
+          - os: ubuntu-22.04
+            target: linux-x86_64
+            rust-target: x86_64-unknown-linux-gnu
+            args: --bundles appimage
+            bundle-dir: app/src-tauri/target/release/bundle
+            glob: appimage/*.AppImage
+            asset: linux  # key of RELEASE_ASSETS in tools/lib/constants.mjs (Inkroot-Linux-x86_64.AppImage)
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/package-lock.json
+            app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          key: ${{ matrix.target }}
+      - name: Linux deps for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf libssl-dev build-essential libfuse2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: edl-${{ matrix.target }}
+          path: tools/.build
+      - name: Unpack edl build
+        run: |
+          tar -C tools/.build -xf tools/.build/edl-${{ matrix.target }}.tar
+          rm tools/.build/edl-${{ matrix.target }}.tar
+          ls -la tools/.build/${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: wdi-windows-x86_64
+          path: tools/.build/windows-x86_64
+
+      - name: Check Apple secrets are set
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then echo "::error::secret $v is not set (see docs/RELEASING.md §1-2)"; missing=1; fi
+          done
+          exit "$missing"
+      # Imported here, not by Tauri: beforeBuildCommand (staging + nested signing) runs before
+      # Tauri's own keychain import. APPLE_CERTIFICATE is not passed to tauri-action, so it uses this keychain.
+      - name: Import Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          KC_PW="$(openssl rand -hex 16)"
+          echo "::add-mask::$KC_PW"
+          CERT="$RUNNER_TEMP/cert.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT"
+          security create-keychain -p "$KC_PW" build.keychain
+          security default-keychain -s build.keychain
+          security list-keychains -d user -s build.keychain login.keychain
+          security unlock-keychain -p "$KC_PW" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import "$CERT" -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" build.keychain >/dev/null
+          rm -f "$CERT"
+          if ! security find-identity -v -p codesigning build.keychain | grep -qF "\"$APPLE_SIGNING_IDENTITY\""; then
+            echo "::error::APPLE_SIGNING_IDENTITY is not in the imported certificate. Identities found:"
+            security find-identity -v -p codesigning build.keychain
+            exit 1
+          fi
+
+      - run: npm ci --prefix app
+      # beforeBuildCommand stages the real resources (and, on macOS, signs + verifies every nested Mach-O).
+      # Tauri then signs the app with the hardened runtime, notarizes it and staples it.
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: app
+          args: ${{ matrix.args }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+
+      - name: No placeholders were staged
+        run: node tools/stage-resources.mjs --check --target ${{ matrix.target }}
+
+      - name: Smoke-test the bundled edl
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            EDL="${{ matrix.bundle-dir }}/macos/Inkroot.app/Contents/Resources/resources/tools/edl/edl"
+          elif [ "$RUNNER_OS" = Windows ]; then
+            EDL=app/src-tauri/resources/tools/edl/edl.exe
+          else
+            # Test the edl as actually shipped inside the built AppImage.
+            APPIMGS=(${{ matrix.bundle-dir }}/appimage/*.AppImage); APPIMG="${APPIMGS[0]}"
+            XDIR="$(mktemp -d)"
+            chmod +x "$APPIMG"
+            (cd "$XDIR" && "$GITHUB_WORKSPACE/$APPIMG" --appimage-extract >/dev/null)
+            EDL="$(find "$XDIR/squashfs-root" -path '*resources/tools/edl/edl' -type f | head -n1)"
+            [ -n "$EDL" ] || { echo "::error::edl not found inside the AppImage"; exit 1; }
+          fi
+          out="$("$EDL" --inkroot-selftest 2>&1)" || { echo "$out"; echo "::error::$EDL --inkroot-selftest failed"; exit 1; }
+          echo "$out"
+          grep -q "libusb OK" <<<"$out" || { echo "::error::edl self-test did not find libusb"; exit 1; }
+
+      - name: Verify signatures & notarization
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP="${{ matrix.bundle-dir }}/macos/Inkroot.app"
+          [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
+
+          echo "== nested Mach-O signatures (verifyAll)"
+          node --input-type=module -e '
+            import { pathToFileURL } from "node:url";
+            const { verifyAll } = await import(pathToFileURL("tools/lib/sign-macos.mjs").href);
+            const r = await verifyAll(process.argv[1], process.env.APPLE_TEAM_ID);
+            if (!r.ok) { console.error("FAIL\n- " + r.problems.join("\n- ")); process.exit(1); }
+            console.log("ok");
+          ' "$APP/Contents/Resources"
+
+          echo "== codesign"
+          codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tee codesign.log
+          grep -q "valid on disk" codesign.log
+          grep -q "satisfies its Designated Requirement" codesign.log
+
+          echo "== Gatekeeper (app)"
+          spctl --assess --type execute -vv "$APP" 2>&1 | tee spctl-app.log
+          grep -q "accepted" spctl-app.log
+          grep -q "source=Notarized Developer ID" spctl-app.log
+
+          echo "== stapled ticket (app)"
+          xcrun stapler validate "$APP" 2>&1 | tee stapler-app.log
+          grep -q "The validate action worked!" stapler-app.log
+
+          shopt -s nullglob
+          dmgs=(${{ matrix.bundle-dir }}/dmg/*.dmg)
+          [ "${#dmgs[@]}" = 1 ] || { echo "::error::expected 1 DMG, found ${#dmgs[@]}: ${dmgs[*]}"; exit 1; }
+          DMG="${dmgs[0]}"
+
+          echo "== sign, notarize and staple the DMG"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait 2>&1 | tee notary.log || true
+          grep -q "status: Accepted" notary.log || {
+            id="$(sed -n 's/^ *id: //p' notary.log | head -n1)"
+            [ -n "$id" ] && xcrun notarytool log "$id" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
+            echo "::error::DMG notarization was not accepted"; exit 1
+          }
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature -vv "$DMG" 2>&1 | tee spctl-dmg.log
+          grep -q "accepted" spctl-dmg.log
+
+      - name: Upload under the stable asset name
+        run: |
+          # Stable names live in tools/lib/constants.mjs so releases/latest/download/<name> links keep working.
+          ASSET="$(node --input-type=module -e '
+            const { RELEASE_ASSETS } = await import("./tools/lib/constants.mjs");
+            const n = RELEASE_ASSETS[process.argv[1]];
+            if (!n) { console.error("no RELEASE_ASSETS entry for " + process.argv[1]); process.exit(1); }
+            console.log(n);
+          ' "${{ matrix.asset }}")"
+          shopt -s nullglob
+          found=(${{ matrix.bundle-dir }}/${{ matrix.glob }})
+          [ "${#found[@]}" = 1 ] || { echo "::error::expected 1 file for ${{ matrix.glob }}, found ${#found[@]}: ${found[*]}"; exit 1; }
+          cp "${found[0]}" "$ASSET"
+          echo "${found[0]} -> $ASSET"
+          gh release upload "$TAG" "$ASSET" --clobber -R "$GITHUB_REPOSITORY"
+
+      - name: Remove build keychain
+        if: always() && runner.os == 'macOS'
+        run: security delete-keychain build.keychain || true
+
+  checksums:
+    needs: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download the installers
+        run: gh release download "$TAG" -p 'Inkroot-*' -D dist -R "$GITHUB_REPOSITORY"
+      - name: Exactly the four stable-named installers
+        working-directory: dist
+        run: |
+          ls -la
+          expected="$(node --input-type=module -e '
+            const { RELEASE_ASSETS } = await import("../tools/lib/constants.mjs");
+            console.log(Object.values(RELEASE_ASSETS).join("\n"));
+          ' | LC_ALL=C sort)"
+          actual="$(printf '%s\n' Inkroot-* | LC_ALL=C sort)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::expected exactly these $(wc -l <<<"$expected" | tr -d ' ') assets:"; echo "$expected"; echo "got:"; echo "$actual"; exit 1
+          fi
+      - name: Upload SHA256SUMS.txt
+        working-directory: dist
+        run: |
+          sha256sum Inkroot-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"

@@ -1,6 +1,8 @@
 # 01 · Rooting the BOOX Note Max with Magisk
 
-Verified on Onyx firmware **v4.2 (`TKQ1.230721.002`)**, SoC **SM8150/SDM855**, Magisk **30.x**.
+> **Easiest: use the [Inkroot app](https://github.com/n0dal/inkroot#download).** It does every step in this guide for you, with checks at each step. This guide is the manual path for tinkerers.
+
+Verified on Onyx firmware **v4.2 (`TKQ1.230721.002`)**, SoC **SM8150/SDM855**, Magisk **30.7**.
 
 > [!IMPORTANT]
 > The one thing that will brick you: this device is **system-as-root with dm-verity/AVB
@@ -18,11 +20,32 @@ Magisk's own `boot_patch.sh`, which also lets us force the verity flags. It's a 
 
 ## What you need
 
-- The Note Max with **USB debugging** on (*Settings → About → tap build number ×7*, then
-  *Developer options → USB debugging*). Onyx also calls this "USB Debug Mode."
+- The Note Max with **USB debugging** on:
+
+  **Turn on USB debugging**
+
+  *Method A — Onyx menu (try this first):*
+  1. Open **Settings → Apps**.
+  2. Tap the **⋮** menu (top-right) → **USB Debug Mode**, and turn it on.
+
+  *Method B — if you can't find it:*
+  1. Install **Activity Launcher** (free and open source) from F-Droid or Google Play. On a BOOX,
+     Google Play may first need to be turned on under **Settings → Apps**.
+  2. In Activity Launcher, open Android **Settings** (`com.android.settings`).
+  3. Tap **About tablet**, then tap **Build number** 7 times.
+  4. Go back to **System → Developer options** and turn on **USB debugging**.
+
+  Then plug the tablet into your computer, tap **Allow** on "Allow USB debugging?", and tick
+  **Always allow from this computer**.
+
+  > Method A comes from field notes and hasn't been confirmed on firmware 4.2 hardware yet. If it
+  > isn't there on your tablet, Method B works on any Android 13 build.
+
 - `adb` on your computer.
-- A **Magisk APK** from the official releases: <https://github.com/topjohnwu/Magisk/releases>
-  (an `.apk` — it's also a zip; we extract binaries from it).
+- **Magisk 30.7**, from the official release: <https://github.com/topjohnwu/Magisk/releases/tag/v30.7>.
+  Download the file named `Magisk-v30.7.apk` (not `app-debug.apk`); its SHA-256 is
+  `e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5`. It's an `.apk` but also a
+  zip; we extract binaries from it.
 - Your **stock `boot` image** for the active slot. If you don't have it yet, dump it first —
   see [Make a stock backup first](02-unbrick-edl.md#make-a-stock-backup-first). **Keep this file.**
 - A **Qualcomm EDL "deep-flash" cable** and [bkerler/edl](https://github.com/bkerler/edl) for
@@ -34,14 +57,14 @@ Magisk's own `boot_patch.sh`, which also lets us force the verity flags. It's a 
 helper script does the extraction + patch + pull for you:
 
 ```bash
-./scripts/patch-boot.sh Magisk-v30.x.apk boot_b.stock.img patched-boot.img
+./scripts/patch-boot.sh Magisk-v30.7.apk boot_b.stock.img patched-boot.img
 ```
 
 <details><summary>What that script does (do it by hand if you prefer)</summary>
 
 ```bash
 # 1. extract Magisk's binaries + scripts from the APK (an APK is a zip)
-unzip -o Magisk-v30.x.apk -d magisk_extract >/dev/null
+unzip -o Magisk-v30.7.apk -d magisk_extract >/dev/null
 
 # 2. push them to the device
 adb shell 'rm -rf /data/local/tmp/mgk; mkdir -p /data/local/tmp/mgk'

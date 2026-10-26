@@ -1,5 +1,7 @@
 # boot-service — run a script as root at every boot
 
+> **Easiest: use the [Inkroot app](https://github.com/n0dal/inkroot#download).** It does every step in this guide for you, with checks at each step. This guide is the manual path for tinkerers.
+
 On the Note Max (Onyx 4.2), Magisk's normal **`/data/adb/service.d` scripts never run**, and the
 Magisk **app can't grant interactive `su`**. This is a tiny, reliable way to run *your own* script
 as **real root at every boot** anyway. (Full reasoning in [../docs/03-notes-and-gotchas.md](../docs/03-notes-and-gotchas.md).)
@@ -16,7 +18,7 @@ as **real root at every boot** anyway. (Full reasoning in [../docs/03-notes-and-
 ## Use it
 ```bash
 # edit example-service.sh to do what you want, then:
-./build-and-flash.sh Magisk-v30.x.apk boot_b.stock.img boot_b
+./build-and-flash.sh Magisk-v30.7.apk boot_b.stock.img boot_b
 ```
 That patches `boot` (verity-safe), bakes in the hook, seeds your scripts, and EDL-flashes.
 

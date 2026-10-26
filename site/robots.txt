@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://n0dal.github.io/inkroot/sitemap.xml

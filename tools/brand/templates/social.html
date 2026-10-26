@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inkroot social preview</title>
+<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="scene.css">
+<style>
+  body { width: 1280px; height: 640px; overflow: hidden; }
+  .canvas { width: 1280px; height: 640px; }
+  .copy { margin-left: 72px; width: 660px; }
+  .copy h1 { font-size: 56px; margin: 34px 0 24px; }
+  .copy .label { font-size: 13.5px; }
+  .copy .chip { margin-top: 28px; font-size: 13px; }
+  .url { position: absolute; z-index: 1; left: 72px; bottom: 40px; font: 600 20px/1 var(--mono); letter-spacing: 0.02em;
+    background: var(--panel); padding: 10px 14px 10px 0; }
+  .url b { font-weight: 400; color: var(--muted); }
+  .tablet { font-size: 13px; right: 60px; top: 50%; transform: translateY(-50%); }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="titlebar"><i></i><i></i><i></i></div>
+  <div class="stage">
+    <div class="field dither" data-field="0.57"></div>
+    <div class="copy">
+      <img class="wordmark" data-wordmark alt="Inkroot">
+      <h1 class="h">One-click root &amp; rescue<br>for the BOOX Note&nbsp;Max</h1>
+      <div class="label">Magisk root · EDL un-brick · Mac / Windows / Linux</div>
+      <span class="chip" data-dot>Note Max / FW 4.2</span>
+    </div>
+    <div class="url">n0dal.github.io/<b>inkroot</b></div>
+    <div data-tablet></div>
+  </div>
+</div>
+<script type="module">
+  import { mount } from './scene.mjs';
+  mount();
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.decode()));
+  document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

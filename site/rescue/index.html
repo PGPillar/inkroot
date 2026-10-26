@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BOOX stuck on logo or bootlooping? Unbrick your Note Max over EDL — Inkroot</title>
+<meta name="description" content="Is your BOOX stuck on the ONYX logo or in a bootloop? It's usually a soft brick. Unbrick your BOOX Note Max over Qualcomm EDL with a deep-flash cable and your boot backup.">
+<link rel="canonical" href="https://n0dal.github.io/inkroot/rescue/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Inkroot">
+<meta property="og:title" content="BOOX stuck on logo or bootlooping? Unbrick your Note Max over EDL — Inkroot">
+<meta property="og:description" content="Is your BOOX stuck on the ONYX logo or in a bootloop? It's usually a soft brick. Unbrick your BOOX Note Max over Qualcomm EDL with a deep-flash cable and your boot backup.">
+<meta property="og:url" content="https://n0dal.github.io/inkroot/rescue/">
+<meta property="og:image" content="https://n0dal.github.io/inkroot/assets/social/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Inkroot — one-click root and rescue for the ONYX BOOX Note Max">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#E8E9E4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/inkroot/assets/brand/inkroot-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/inkroot/assets/icon/inkroot-icon-1024.png">
+<link rel="preload" href="../fonts/IBMPlexSans-Regular-Latin1.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/IBMPlexSans-SemiBold-Latin1.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../css/panel.css">
+<!--@faqpage-->
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../" aria-label="Inkroot home">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="../assets/brand/inkroot-wordmark-dark.svg">
+        <img src="../assets/brand/inkroot-wordmark.svg" width="153" height="48" alt="Inkroot">
+      </picture>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="../#download">Download</a>
+      <a class="wide" href="../#how-it-works">How it works</a>
+      <a href="./" aria-current="page">Rescue</a>
+      <a class="wide" href="../#faq">FAQ</a>
+      <a href="https://github.com/n0dal/inkroot">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap">
+    <div>
+      <p class="label">Unbrick a BOOX · stuck on logo · bootloop</p>
+      <h1 id="hero-title">BOOX stuck on the logo? Let's bring it back.</h1>
+      <p class="lede">If your BOOX Note Max hangs on the ONYX logo, keeps restarting, or shows nothing at all after a boot flash, it can almost always be rescued. You need a deep-flash cable, a computer with a USB-A port, and the backup of your tablet's startup software.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#cable-steps">Show me the steps</a>
+        <a class="btn" href="#app">Get the app</a>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="field" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="screen art-screen">
+        <div class="art">
+<svg viewBox="0 0 480 176" width="480" height="176" role="img" aria-labelledby="cable-title" shape-rendering="crispEdges" fill="none" stroke="currentColor" stroke-width="2">
+  <title id="cable-title">A Qualcomm deep-flash (EDL) cable: USB-A plug for the computer, a small button in the middle of the cable, USB-C plug for the tablet</title>
+  <defs>
+    <pattern id="d50" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="currentColor" stroke="none"/><rect x="2" y="2" width="2" height="2" fill="currentColor" stroke="none"/></pattern>
+    <pattern id="d25" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="currentColor" stroke="none"/></pattern>
+  </defs>
+  <rect x="9" y="69" width="50" height="38"/>
+  <rect x="17" y="81" width="34" height="8" fill="currentColor"/>
+  <rect x="59" y="61" width="52" height="54" fill="url(#d50)"/>
+  <path d="M111 88H189"/>
+  <rect x="189" y="61" width="102" height="54" fill="url(#d25)"/>
+  <rect x="219" y="73" width="42" height="30" fill="currentColor"/>
+  <path d="M240 13V53M231 44l9 9 9-9"/>
+  <path d="M291 88H371"/>
+  <rect x="371" y="65" width="46" height="46" fill="url(#d50)"/>
+  <rect x="417" y="76" width="44" height="24"/>
+  <rect x="425" y="85" width="28" height="6" fill="currentColor"/>
+  <g fill="currentColor" stroke="none" font-family="IBM Plex Mono, monospace" font-size="13" letter-spacing="1.5">
+    <text x="256" y="30">HOLD</text>
+    <text x="9" y="148">USB-A</text><text x="9" y="166">→ COMPUTER</text>
+    <text x="471" y="148" text-anchor="end">USB-C</text><text x="471" y="166" text-anchor="end">→ TABLET</text>
+    <text x="240" y="148" text-anchor="middle">BUTTON</text>
+  </g>
+</svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="dont-panic" aria-labelledby="panic-title">
+  <div class="wrap split">
+    <div>
+      <p class="label">Breathe first</p>
+      <h2 id="panic-title">Don't panic: a black screen or a logo hang is almost always a soft brick</h2>
+    </div>
+    <div class="prose">
+      <p>A BOOX stuck on the logo or in a bootloop usually means one thing went wrong: the tablet's startup software (the <code>boot</code> partition) is damaged or doesn't pass its checks. Your notes, books and the rest of the system are still there.</p>
+      <p>The Note Max has a rescue door built into its Qualcomm chip, called <strong>EDL</strong> (Emergency Download mode). It works even when the screen stays black. Through it, you write a good copy of the startup software back, and the tablet starts again.</p>
+      <p>A blank screen during the rescue is normal. Take your time — nothing here is a race.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="what-you-need" aria-labelledby="need-title">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="label">Three things</p>
+      <h2 id="need-title">What you need</h2>
+    </div>
+    <ul class="need">
+      <li>
+        <h3>A deep-flash (EDL) cable</h3>
+        <p>A USB cable with a small button on it that pushes the tablet into EDL. Search for <strong>“Qualcomm deep flash cable”</strong> or <strong>“EDL cable”</strong>; they cost a few dollars. A normal charging cable won't do it.</p>
+      </li>
+      <li>
+        <h3>A real USB-A port</h3>
+        <p>Plug the cable's USB-A end straight into a computer's own USB-A port. USB-C adapters and dongles usually don't work for this.</p>
+      </li>
+      <li>
+        <h3>Your boot backup</h3>
+        <p>The safety copy of your tablet's startup software — the one Inkroot made before rooting, or your own <code>boot</code> image backup.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="section" id="app" aria-labelledby="app-title">
+  <div class="wrap split">
+    <div>
+      <p class="label">The easy way</p>
+      <h2 id="app-title">With the Inkroot app</h2>
+      <p>Open Inkroot and pick <strong>Rescue</strong>. It finds your safety copy, walks you through the cable one step at a time, waits until it sees the tablet, writes the copy back and checks it before restarting.</p>
+      <div class="beta">
+        <span class="chip">Beta</span>
+        <p><strong>Beta — not yet hardware-verified.</strong> Inkroot hasn't been tested end-to-end on a real tablet yet, so expect rough edges — and keep your safety copy.</p>
+      </div>
+      <ul class="downloads compact">
+        <li><a class="dl" data-dl="mac-arm" href="{{dl:mac-arm}}"><span class="rec">Recommended for this computer</span><span class="os">Mac</span><span class="for">Apple Silicon</span><span class="get"><span>Download</span><span data-size="mac-arm"></span></span></a></li>
+        <li><a class="dl" data-dl="mac-intel" href="{{dl:mac-intel}}"><span class="rec">Recommended for this computer</span><span class="os">Mac</span><span class="for">Intel</span><span class="get"><span>Download</span><span data-size="mac-intel"></span></span></a></li>
+        <li><a class="dl" data-dl="windows" href="{{dl:windows}}"><span class="rec">Recommended for this computer</span><span class="os">Windows</span><span class="for">10/11, 64-bit</span><span class="get"><span>Download</span><span data-size="windows"></span></span></a></li>
+        <li><a class="dl" data-dl="linux" href="{{dl:linux}}"><span class="rec">Recommended for this computer</span><span class="os">Linux</span><span class="for">x86_64 AppImage</span><span class="get"><span>Download</span><span data-size="linux"></span></span></a></li>
+      </ul>
+      <p class="ver label" data-version-line hidden>Latest release: <span data-version></span></p>
+    </div>
+    <div class="screen">
+      <img src="../assets/screenshots/rescue-cable.png" width="880" height="640" loading="lazy" decoding="async"
+        alt="An Inkroot step screen: “Plug in your Note Max”, with a line drawing of the tablet and its cable">
+    </div>
+  </div>
+</section>
+
+<section class="section" id="cable-steps" aria-labelledby="steps-title">
+  <div class="wrap split">
+    <div>
+      <p class="label">Into EDL mode · BOOX EDL</p>
+      <h2 id="steps-title">The cable steps</h2>
+      <p>Plug the cable's USB-A end into your computer first. Then:</p>
+    </div>
+    <div>
+      <ol class="cable-steps">
+        <li><span><strong>Hold the button</strong> on the cable, and keep holding it.</span></li>
+        <li><span><strong>Plug the cable into the tablet</strong> (USB-C end).</span></li>
+        <li><span><strong>Hold the tablet's power button for about 15 seconds</strong>, until the screen goes fully blank.</span></li>
+        <li><span><strong>Keep the cable button held about 10 seconds more.</strong></span></li>
+        <li><span><strong>Release.</strong> The tablet is now in EDL and stays blank. That's normal.</span></li>
+      </ol>
+      <p class="muted after-steps">A plain restart with the power button doesn't reach EDL on the Note Max, and the volume-key combinations didn't either. The cable is the reliable way in. If the computer doesn't see the tablet, try another USB-A port and hold the buttons a little longer.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="no-usb-a" aria-labelledby="usba-title">
+  <div class="wrap split">
+    <div>
+      <h2 id="usba-title">No USB-A port?</h2>
+    </div>
+    <div class="prose">
+      <p>Many newer laptops only have USB-C, and adapters usually drop the signal the cable needs. Borrow a computer that has a real USB-A port — a desktop, or an older laptop — and run Inkroot there. That's exactly why there are Windows and Linux builds as well as Mac.</p>
+      <p>Backing up or rooting a tablet that still starts doesn't need any of this: a normal USB-C cable works, even straight into a Mac.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="no-backup" aria-labelledby="backup-title">
+  <div class="wrap split">
+    <div>
+      <h2 id="backup-title">No backup?</h2>
+    </div>
+    <div class="prose">
+      <p>That isn't supported yet. Rescue writes back a copy of <em>your</em> tablet's startup software, and Inkroot never hosts or downloads firmware. If you don't have a backup, please <a href="https://github.com/n0dal/inkroot/issues/new/choose">open an issue</a> with your tablet's details, so we know it's needed.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="manual" aria-labelledby="manual-title">
+  <div class="wrap split">
+    <div>
+      <h2 id="manual-title">Manual way</h2>
+    </div>
+    <div class="prose">
+      <p>Prefer a terminal? The <a href="https://github.com/n0dal/inkroot/blob/main/docs/02-unbrick-edl.md">manual EDL un-brick guide</a> covers the same rescue by hand with the open-source <a href="https://github.com/bkerler/edl">bkerler/edl</a> client: the exact cable, the loader, and the commands to write <code>boot</code> back.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="label">Unbrick BOOX questions</p>
+      <h2 id="faq-title">Questions</h2>
+    </div>
+    <div class="faq">
+<details>
+<summary>Why is my BOOX stuck on the logo?</summary>
+<div class="answer">
+<p>Almost always because its startup software (the <code>boot</code> partition) is damaged or no longer passes the tablet's checks — for example after a root attempt went wrong or a write was cut off. That's a soft brick: the rest of the tablet is fine, and writing a good copy of <code>boot</code> back over Qualcomm EDL brings it back.</p>
+</div>
+</details>
+<details>
+<summary>Can I unbrick a BOOX without a backup?</summary>
+<div class="answer">
+<p>Not with Inkroot yet. Rescue writes back a copy of your own tablet's startup software, and Inkroot never hosts or downloads firmware. If you don't have a backup, please <a href="https://github.com/n0dal/inkroot/issues/new/choose">open an issue</a> with your tablet's details.</p>
+</div>
+</details>
+<details>
+<summary>Which cable do I need to unbrick a BOOX?</summary>
+<div class="answer">
+<p>A <strong>Qualcomm deep-flash (EDL) cable</strong>: a USB cable with a small button that pushes the tablet into EDL. Search for “Qualcomm deep flash cable” or “EDL cable”. A normal charging cable won't work. Plug its USB-A end into a real USB-A port; USB-C adapters usually don't work.</p>
+</div>
+</details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <nav class="links" aria-label="Project">
+      <a href="https://github.com/n0dal/inkroot">GitHub</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/DISCLAIMER.md">Disclaimer</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/LICENSE">MIT License</a>
+    </nav>
+    <p><!--@disclaimer--></p>
+    <p>Inkroot is not affiliated with, endorsed by, or sponsored by Onyx International / BOOX, Qualcomm, Google or the Magisk project.</p>
+    <p>Inkroot collects and sends nothing — no analytics, no telemetry, no account. Your safety copies stay on your computer and are never uploaded.</p>
+    <p class="muted">BOOX and ONYX are trademarks of their respective owners.</p>
+  </div>
+</footer>
+
+<script type="module">
+  import { init } from '../js/downloads.js';
+  init(document);
+</script>
+</body>
+</html>

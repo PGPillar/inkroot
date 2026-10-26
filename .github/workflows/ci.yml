@@ -1,0 +1,128 @@
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci --prefix tools
+      - run: npm test --prefix tools
+
+  rust:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: macos-15
+            target: darwin-aarch64
+          - os: windows-latest
+            target: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux deps for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf libssl-dev build-essential
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/package-lock.json
+            app/package-lock.json
+      - run: npm ci --prefix tools
+      # Placeholders satisfy tauri_build's resource checks; `--check` rejects them, so they never ship.
+      - run: node tools/stage-resources.mjs --placeholders --target ${{ matrix.target }}
+      # tauri::generate_context! embeds app/dist, so build the frontend first.
+      - run: npm ci --prefix app
+      - run: npm run build --prefix app
+      - name: cargo fmt
+        working-directory: app/src-tauri
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        working-directory: app/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: app/src-tauri
+        run: cargo test
+
+  frontend:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  site:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci --prefix tools
+      - run: npm test --prefix tools
+      - run: npm run site --prefix tools
+      - run: npx --prefix tools html-validate --config site/.htmlvalidate.json "_site/**/*.html"
+      - run: npm run check-site --prefix tools
+      # Root-relative /inkroot/… links (404 page, favicon) resolve against _site, which Pages serves at /inkroot/.
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline --no-progress
+            --root-dir ${{ github.workspace }}/_site
+            --remap '^(file://.*/_site)/inkroot(/|$) $1/'
+            _site
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No stale Magisk 30.1/30.x or "tap build" references
+        run: |
+          if grep -rnE "30\.1|30\.x|tap build" README.md docs/0*.md boot-service scripts; then
+            echo "stale Magisk/USB-debug text found"
+            exit 1
+          fi

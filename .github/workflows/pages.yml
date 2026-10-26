@@ -1,0 +1,60 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'assets/**'
+      - 'tools/site/**'
+      - 'tools/lib/**'
+      - 'README.md'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - run: npm ci --prefix tools
+      - run: npm test --prefix tools
+      - run: npm run site --prefix tools
+      - run: npx --prefix tools html-validate --config site/.htmlvalidate.json "_site/**/*.html"
+      - run: npm run check-site --prefix tools
+      # Root-relative /inkroot/… links (404 page, favicon) resolve against _site, which Pages serves at /inkroot/.
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline --no-progress
+            --root-dir ${{ github.workspace }}/_site
+            --remap '^(file://.*/_site)/inkroot(/|$) $1/'
+            _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4

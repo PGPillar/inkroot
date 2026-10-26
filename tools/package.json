@@ -1,0 +1,21 @@
+{
+  "name": "inkroot-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "brand": "node brand/render.mjs all",
+    "site": "node site/build.mjs",
+    "check-site": "node site/check.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.2"
+  },
+  "devDependencies": {
+    "@ibm/plex-mono": "^1",
+    "@ibm/plex-sans": "^1",
+    "html-validate": "^9",
+    "opentype.js": "1.3.4",
+    "playwright": "^1.48"
+  }
+}

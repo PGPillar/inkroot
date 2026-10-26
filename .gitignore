@@ -10,3 +10,21 @@ magisk_extract/
 *.log
 *.out
 .DS_Store
+.superpowers/
+# tools workspace
+tools/node_modules/
+tools/.cache/
+tools/.build/
+# staged app resources (binaries) — the stub README stays tracked
+app/src-tauri/resources/*
+!app/src-tauri/resources/README.md
+# built site
+_site/
+# brand renders are committed even though *.png might be ignored elsewhere
+!assets/**/*.png
+app/node_modules/
+app/dist/
+app/src-tauri/target/
+app/src-tauri/gen/
+# Playwright/UI test output
+app/test-results/

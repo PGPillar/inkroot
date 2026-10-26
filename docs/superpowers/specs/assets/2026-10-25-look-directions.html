@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App look — three e-ink directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page:#e9e7e1; --pageInk:#1d1d1b; --muted:#6c6a64; --rule:#cfccc4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--pageInk);font-family:"Instrument Sans",system-ui,sans-serif;padding:40px 28px 80px}
+  .wrap{max-width:1320px;margin:0 auto}
+  header.top h1{font-family:Newsreader,serif;font-weight:500;font-size:34px;letter-spacing:-.01em}
+  header.top p{color:var(--muted);margin-top:6px;max-width:760px;line-height:1.5}
+  .eyebrow{font:600 11px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:44px 0 14px}
+
+  /* --- direction cards --- */
+  .dirs{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  @media (max-width:1100px){.dirs{grid-template-columns:1fr}}
+  .dir{cursor:pointer;border-radius:14px;padding:14px;border:2px solid transparent;transition:border-color .2s,background .2s}
+  .dir:hover{background:#00000008}
+  .dir.selected{border-color:var(--pageInk);background:#ffffff55}
+  .dir h3{font-family:Newsreader,serif;font-weight:500;font-size:22px;margin:14px 4px 4px}
+  .dir p{font-size:14px;color:var(--muted);line-height:1.5;margin:0 4px}
+  .dir .tag{display:inline-block;font:500 11px "IBM Plex Mono",monospace;border:1px solid var(--rule);border-radius:99px;padding:3px 9px;margin:10px 4px 0}
+
+  /* --- generic window --- */
+  .win{border-radius:12px;overflow:hidden;box-shadow:0 1px 0 #0000000d,0 18px 40px -18px #00000040;aspect-ratio:4/3.1;display:flex;flex-direction:column}
+  .bar{height:34px;display:flex;align-items:center;gap:7px;padding:0 13px;flex:none}
+  .bar i{width:11px;height:11px;border-radius:50%;display:block}
+  .screen{flex:1;padding:26px 26px 22px;display:flex;flex-direction:column;position:relative}
+
+  /* ===== A · PAPER ===== */
+  .A .win{background:#f5f2ea;color:#1c1b19}
+  .A .bar{background:#efebe1;border-bottom:1px solid #e0dbcf}
+  .A .bar i{background:#d8d2c4}
+  .A .screen{background:#f5f2ea url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .A .logo{font-family:Newsreader,serif;font-size:19px;font-weight:600;letter-spacing:-.01em}
+  .A .logo em{font-style:italic;font-weight:400}
+  .A .status{margin-left:auto;font-size:11.5px;border:1px solid #1c1b1930;border-radius:99px;padding:4px 10px;display:flex;gap:6px;align-items:center}
+  .A .status b{width:6px;height:6px;border-radius:50%;background:#1c1b19}
+  .A h2{font-family:Newsreader,serif;font-weight:400;font-size:30px;line-height:1.08;letter-spacing:-.015em;margin:26px 0 6px}
+  .A .sub{font-size:13px;color:#6b675e}
+  .A .choices{margin-top:auto;display:flex;flex-direction:column;border-top:1px solid #1c1b1922}
+  .A .ch{display:flex;align-items:center;gap:14px;padding:12px 2px;border-bottom:1px solid #1c1b1922}
+  .A .ch .n{font-family:Newsreader,serif;font-style:italic;font-size:15px;width:16px;color:#8b867a}
+  .A .ch .t{font-weight:600;font-size:14px}
+  .A .ch .d{font-size:12px;color:#6b675e}
+  .A .ch .go{margin-left:auto;font-size:17px}
+  .A .ch.primary .t{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1.5px}
+
+  /* ===== B · PANEL ===== */
+  .B .win{background:#e6e7e2;color:#111}
+  .B .bar{background:#111;}
+  .B .bar i{background:#555}
+  .B .screen{font-family:"IBM Plex Sans",sans-serif;background:#e8e9e4}
+  .B .logo{font:600 14px "IBM Plex Mono",monospace;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+  .B .logo .mk{width:16px;height:16px;background:repeating-conic-gradient(#111 0 25%,transparent 0 50%) 0 0/4px 4px;border:2px solid #111}
+  .B .status{margin-left:auto;font:500 11px "IBM Plex Mono",monospace;background:#111;color:#e8e9e4;padding:4px 8px}
+  .B h2{font:600 26px/1.1 "IBM Plex Sans",sans-serif;letter-spacing:-.02em;margin:24px 0 6px}
+  .B .sub{font:400 12px "IBM Plex Mono",monospace;color:#555}
+  .B .choices{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .B .ch{border:2px solid #111;padding:12px 10px 10px;display:flex;flex-direction:column;gap:6px;min-height:118px;background:#e8e9e4}
+  .B .ch.primary{background:#111;color:#e8e9e4}
+  .B .ch .ico{height:34px;width:34px;background:repeating-conic-gradient(currentColor 0 25%,transparent 0 50%) 0 0/3px 3px;opacity:.85;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+  .B .ch .t{font-weight:600;font-size:13.5px;margin-top:auto}
+  .B .ch .d{font:400 10.5px "IBM Plex Mono",monospace;opacity:.7}
+
+  /* ===== C · BEZEL ===== */
+  .C .win{background:#2b2b2a;padding:0}
+  .C .bar{background:#2b2b2a}
+  .C .bar i{background:#4a4a48}
+  .C .bezel{flex:1;margin:4px 18px 18px;background:#3a3a38;border-radius:14px;padding:16px 16px 26px;box-shadow:inset 0 1px 0 #ffffff14;display:flex;position:relative}
+  .C .bezel:after{content:"BOOX";position:absolute;bottom:7px;left:50%;transform:translateX(-50%);font:600 7px "IBM Plex Mono";letter-spacing:.3em;color:#ffffff40}
+  .C .screen{background:#ecebe6;border-radius:3px;box-shadow:inset 0 0 0 1px #00000030,inset 0 2px 6px #0000001a;color:#1a1a1a;padding:20px 20px 16px}
+  .C .logo{font-family:Newsreader,serif;font-size:16px;font-weight:600}
+  .C .status{margin-left:auto;font-size:10.5px;color:#555}
+  .C h2{font-family:Newsreader,serif;font-weight:500;font-size:26px;line-height:1.1;text-align:center;margin:22px 0 4px}
+  .C .sub{font-size:12px;color:#666;text-align:center}
+  .C .choices{margin-top:auto;display:flex;flex-direction:column;gap:7px}
+  .C .ch{border:1px solid #1a1a1a;border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+  .C .ch.primary{background:#1a1a1a;color:#ecebe6}
+  .C .ch .t{font-weight:600;font-size:13.5px}
+  .C .ch .d{font-size:11px;opacity:.65;margin-left:auto}
+  .row{display:flex;align-items:center}
+
+  /* ===== flow preview (themed by selected direction) ===== */
+  .flow-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  .flow-head p{color:var(--muted);font-size:14px;max-width:640px;line-height:1.5}
+  .flow-head button{margin-left:auto;font:500 13px "Instrument Sans";background:var(--pageInk);color:var(--page);border:0;border-radius:99px;padding:9px 16px;cursor:pointer}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:16px}
+  @media (max-width:1100px){.flow{grid-template-columns:1fr 1fr}}
+  .fs{border-radius:10px;overflow:hidden;aspect-ratio:3/3.4;display:flex;flex-direction:column;padding:20px;position:relative;
+      background:var(--fbg);color:var(--fink);font-family:var(--fbody);box-shadow:0 14px 30px -18px #00000050;border:var(--fborder)}
+  .fs .step{font:500 10.5px "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;opacity:.55}
+  .fs h4{font-family:var(--fhead);font-weight:var(--fhw);font-size:21px;line-height:1.12;margin:8px 0 6px;letter-spacing:-.01em}
+  .fs .p{font-size:12.5px;line-height:1.5;opacity:.75}
+  .fs .art{flex:1;display:flex;align-items:center;justify-content:center}
+  .fs .btn{margin-top:auto;align-self:stretch;text-align:center;padding:10px;font-weight:600;font-size:13px;background:var(--fink);color:var(--fbg);border-radius:var(--frad)}
+  .fs .btn.ghost{background:transparent;color:var(--fink);border:1.5px solid var(--fink)}
+  .bar2{height:10px;border:1.5px solid var(--fink);border-radius:var(--frad);overflow:hidden;margin-top:14px}
+  .bar2 span{display:block;height:100%;width:62%;background:repeating-linear-gradient(90deg,var(--fink) 0 6px,transparent 6px 8px)}
+  .meta{display:flex;justify-content:space-between;font:400 11px "IBM Plex Mono",monospace;opacity:.6;margin-top:8px}
+  .checks{list-style:none;font-size:12.5px;display:flex;flex-direction:column;gap:7px;margin-top:12px}
+  .checks li{display:flex;gap:8px;align-items:center}
+  .checks li:before{content:"";width:13px;height:13px;border:1.5px solid var(--fink);border-radius:var(--frad);flex:none;background:linear-gradient(var(--fink),var(--fink)) center/7px 7px no-repeat}
+  .checks li.todo:before{background:none}
+  .flowwrap[data-t="A"]{--fbg:#f5f2ea;--fink:#1c1b19;--fhead:Newsreader,serif;--fhw:400;--fbody:"Instrument Sans",sans-serif;--frad:99px;--fborder:0}
+  .flowwrap[data-t="B"]{--fbg:#e8e9e4;--fink:#111;--fhead:"IBM Plex Sans",sans-serif;--fhw:600;--fbody:"IBM Plex Sans",sans-serif;--frad:0;--fborder:2px solid #111}
+  .flowwrap[data-t="C"]{--fbg:#ecebe6;--fink:#1a1a1a;--fhead:Newsreader,serif;--fhw:500;--fbody:"Instrument Sans",sans-serif;--frad:6px;--fborder:14px solid #3a3a38}
+
+  /* e-ink full refresh: black flash, then white, then content */
+  .flash{animation:eink .52s steps(1,end)}
+  @keyframes eink{0%{filter:invert(1) contrast(3)}30%{filter:brightness(0)}55%{filter:brightness(3) grayscale(1)}80%{filter:none}}
+  .note{font-size:13px;color:var(--muted);margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Three e-ink directions for the app</h1>
+    <p>Same home screen, three takes on "feels like the device." Click the one you like, and the four flow screens underneath restyle to match. <b>Inkroot</b> is a placeholder name until the research comes back.</p>
+  </header>
+
+  <div class="eyebrow">Home screen · pick a direction</div>
+  <div class="dirs">
+
+    <!-- A -->
+    <div class="dir A selected" data-choice="A-paper" onclick="pick(this,'A')">
+      <div class="win">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="screen">
+          <div class="row"><span class="logo">ink<em>root</em></span><span class="status"><b></b>Note Max · 4.2 · slot B</span></div>
+          <h2>What would you like<br>to do with your Note Max?</h2>
+          <div class="sub">Your stock backup was saved today at 10:42.</div>
+          <div class="choices">
+            <div class="ch primary"><span class="n">i</span><div><div class="t">Root my Note Max</div><div class="d">Magisk 30.1 · about 10 minutes</div></div><span class="go">→</span></div>
+            <div class="ch"><span class="n">ii</span><div><div class="t">Rescue a stuck device</div><div class="d">Stuck on the ONYX logo or won't boot</div></div><span class="go">→</span></div>
+            <div class="ch"><span class="n">iii</span><div><div class="t">Return to stock</div><div class="d">Put the original boot back</div></div><span class="go">→</span></div>
+          </div>
+        </div>
+      </div>
+      <h3>A · Paper</h3>
+      <p>Warm paper, a literary serif, hairline rules, a faint grain. Calm and bookish, like a beautifully typeset manual.</p>
+      <span class="tag">Newsreader + Instrument Sans</span>
+    </div>
+
+    <!-- B -->
+    <div class="dir B" data-choice="B-panel" onclick="pick(this,'B')">
+      <div class="win">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="screen">
+          <div class="row"><span class="logo"><span class="mk"></span>INKROOT</span><span class="status">● NOTE MAX / FW 4.2 / SLOT_B</span></div>
+          <h2>Pick a job.</h2>
+          <div class="sub">backup ✓ boot_b.img · 96.0 MB · sha 3f9a…c21</div>
+          <div class="choices">
+            <div class="ch primary"><span class="ico" style="--m:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M12 2l3 6 6 1-4.5 4 1 6.5L12 16l-5.5 3.5 1-6.5L3 9l6-1z%22/%3E%3C/svg%3E')"></span><div class="t">Root</div><div class="d">magisk 30.1</div></div>
+            <div class="ch"><span class="ico" style="--m:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M12 2a10 10 0 100 20 10 10 0 000-20zm1 5v6h-2V7zm0 8v2h-2v-2z%22/%3E%3C/svg%3E')"></span><div class="t">Rescue</div><div class="d">stuck / bootloop</div></div>
+            <div class="ch"><span class="ico" style="--m:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M12 4V1L7 6l5 5V7a5 5 0 11-5 5H5a7 7 0 107-8z%22/%3E%3C/svg%3E')"></span><div class="t">Stock</div><div class="d">undo root</div></div>
+          </div>
+        </div>
+      </div>
+      <h3>B · Panel</h3>
+      <p>The UI the BOOX itself would have if it were honest about being 1-bit: mono labels, dithered icons, hard borders, no curves.</p>
+      <span class="tag">IBM Plex Sans + Mono · dithering</span>
+    </div>
+
+    <!-- C -->
+    <div class="dir C" data-choice="C-bezel" onclick="pick(this,'C')">
+      <div class="win">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="bezel">
+          <div class="screen">
+            <div class="row"><span class="logo">Inkroot</span><span class="status">Note Max connected</span></div>
+            <h2>Hello, Note Max.</h2>
+            <div class="sub">Firmware 4.2 — supported ✓</div>
+            <div class="choices">
+              <div class="ch primary"><span class="t">Root my device</span><span class="d">~10 min</span></div>
+              <div class="ch"><span class="t">Rescue a stuck device</span><span class="d">needs EDL cable</span></div>
+              <div class="ch"><span class="t">Return to stock</span><span class="d">~5 min</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h3>C · Bezel</h3>
+      <p>The app <i>is</i> a Note Max: a graphite frame around a paper screen, and each step change does the real black-white e-ink refresh.</p>
+      <span class="tag">Skeuomorphic · refresh transitions</span>
+    </div>
+  </div>
+
+  <div class="eyebrow">The flow · restyles to your pick</div>
+  <div class="flow-head">
+    <p>One calm screen per step, plain words, and one obvious button. Moving between steps can do an e-ink-style "full refresh" flash. Try it →</p>
+    <button onclick="refresh()">Play refresh transition</button>
+  </div>
+  <div class="flowwrap" data-t="A" id="flowwrap">
+    <div class="flow" id="flow">
+      <div class="fs">
+        <div class="step">Step 1 of 4 · Connect</div>
+        <h4>Plug in your Note Max</h4>
+        <div class="p">Use any normal USB-C cable. On the tablet, turn on <b>USB Debug Mode</b>. We'll show you where.</div>
+        <div class="art">
+          <svg width="150" height="110" viewBox="0 0 150 110" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="10" y="8" width="70" height="94" rx="5"/><rect x="17" y="15" width="56" height="74" rx="1"/>
+            <path d="M45 102v4M80 70h22c10 0 10-30 22-30h20" stroke-dasharray="3 3"/><rect x="132" y="34" width="14" height="12" rx="2"/>
+            <path d="M28 30h34M28 38h26M28 46h30" opacity=".5"/>
+          </svg>
+        </div>
+        <div class="btn ghost">Show me how</div>
+      </div>
+      <div class="fs">
+        <div class="step">Step 2 of 4 · Safety copy</div>
+        <h4>Saving your lifeline</h4>
+        <div class="p">Before we change anything, we copy your tablet's original boot so it can always be put back.</div>
+        <ul class="checks">
+          <li>Firmware 4.2 recognised</li>
+          <li>Active slot: B</li>
+          <li class="todo">boot_a, boot_b, vbmeta saved</li>
+          <li class="todo">Checksums verified</li>
+        </ul>
+        <div class="btn">Make the backup</div>
+      </div>
+      <div class="fs">
+        <div class="step">Step 3 of 4 · Rooting</div>
+        <h4>Writing to your tablet</h4>
+        <div class="p">The screen may stay blank. That's normal. Don't unplug it.</div>
+        <div class="art">
+          <svg width="90" height="90" viewBox="0 0 90 90" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="45" cy="45" r="36" stroke-dasharray="2 4"/><path d="M45 20v25l16 10"/></svg>
+        </div>
+        <div class="bar2"><span></span></div>
+        <div class="meta"><span>boot_b · 59 / 96 MB</span><span>~1 min left</span></div>
+      </div>
+      <div class="fs">
+        <div class="step">Done</div>
+        <h4>Your Note Max is rooted.</h4>
+        <div class="p">Magisk 30.1 is running, and so is the boot service. Your backup is in <b>Documents/Inkroot</b>. Keep it.</div>
+        <ul class="checks">
+          <li>Magisk daemon alive</li>
+          <li>Boot service running as root</li>
+          <li>Backup kept safe</li>
+        </ul>
+        <div class="btn">Finish</div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Rescue mode would use the same frame, with large step-by-step illustrations for the deep-flash cable: hold the button, plug in, hold power 15 seconds.</p>
+</div>
+<script>
+  function pick(el,t){
+    toggleSelect && toggleSelect(el);
+    document.querySelectorAll('.dir').forEach(d=>d.classList.toggle('selected',d===el));
+    document.getElementById('flowwrap').dataset.t=t; refresh();
+  }
+  function refresh(){const f=document.getElementById('flow');f.classList.remove('flash');void f.offsetWidth;f.classList.add('flash');}
+</script>
+</body>
+</html>

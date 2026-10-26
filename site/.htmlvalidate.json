@@ -1,0 +1,1 @@
+{"extends":["html-validate:recommended"],"rules":{"no-inline-style":"off","long-title":["error",{"maxlength":80}]}}

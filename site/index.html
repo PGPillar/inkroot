@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inkroot — BOOX root &amp; un-brick tool for the Note Max (Magisk, EDL)</title>
+<meta name="description" content="Root your ONYX BOOX Note Max with Magisk, or unbrick a BOOX stuck on the logo over Qualcomm EDL. Free, open-source app for Mac, Windows and Linux.">
+<link rel="canonical" href="https://n0dal.github.io/inkroot/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Inkroot">
+<meta property="og:title" content="Inkroot — BOOX root &amp; un-brick tool for the Note Max (Magisk, EDL)">
+<meta property="og:description" content="Root your ONYX BOOX Note Max with Magisk, or unbrick a BOOX stuck on the logo over Qualcomm EDL. Free, open-source app for Mac, Windows and Linux.">
+<meta property="og:url" content="https://n0dal.github.io/inkroot/">
+<meta property="og:image" content="https://n0dal.github.io/inkroot/assets/social/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Inkroot — one-click root and rescue for the ONYX BOOX Note Max">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#E8E9E4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/inkroot/assets/brand/inkroot-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/inkroot/assets/icon/inkroot-icon-1024.png">
+<link rel="preload" href="fonts/IBMPlexSans-Regular-Latin1.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/IBMPlexSans-SemiBold-Latin1.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/panel.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Inkroot",
+  "description": "One-click root (Magisk) and un-brick (Qualcomm EDL) for the ONYX BOOX Note Max e-ink tablet, on firmware 4.2.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS, Windows, Linux",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://n0dal.github.io/inkroot/",
+  "downloadUrl": "https://github.com/n0dal/inkroot/releases/latest",
+  "image": "https://n0dal.github.io/inkroot/assets/social/social-preview.png",
+  "isAccessibleForFree": true
+}
+</script>
+<!--@faqpage-->
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Inkroot home">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/brand/inkroot-wordmark-dark.svg">
+        <img src="assets/brand/inkroot-wordmark.svg" width="153" height="48" alt="Inkroot">
+      </picture>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#download">Download</a>
+      <a class="wide" href="#how-it-works">How it works</a>
+      <a href="rescue/">Rescue</a>
+      <a class="wide" href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/n0dal/inkroot">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap">
+    <div>
+      <p class="label">For the ONYX BOOX Note Max · Mac / Windows / Linux</p>
+      <h1 id="hero-title">Root and rescue your BOOX Note Max</h1>
+      <p class="lede pitch">One-click root and rescue for the ONYX BOOX Note Max.</p>
+      <p class="lede">Inkroot roots your BOOX Note Max with Magisk, un-bricks it over Qualcomm EDL when it's stuck on the logo, and puts it back to stock — on Mac, Windows and Linux, without a terminal.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#download">Download Inkroot</a>
+        <a class="btn" href="rescue/">Stuck on the logo?</a>
+      </div>
+      <p class="chip"><span class="dot" aria-hidden="true"></span>Note Max / FW 4.2</p>
+    </div>
+    <div class="stage">
+      <div class="field" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="screen">
+        <img src="assets/screenshots/home.png" width="880" height="640" fetchpriority="high"
+          alt="The Inkroot app: “Pick a job.” with three choices — Root, Rescue and Stock — and the tablet shown as Note Max, firmware 4.2">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="download" aria-labelledby="download-title">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="label">Free and open source · MIT licence</p>
+      <h2 id="download-title">Download Inkroot</h2>
+      <p>Pick the one for your computer. The app does the rest, one plain step at a time.</p>
+    </div>
+
+    <div class="beta">
+      <span class="chip">Beta</span>
+      <p><strong>Beta — not yet hardware-verified.</strong> Inkroot hasn't been tested end-to-end on a real tablet yet, so expect rough edges — and keep your safety copy.</p>
+    </div>
+
+    <ul class="downloads">
+      <li><a class="dl" data-dl="mac-arm" href="{{dl:mac-arm}}">
+        <span class="rec">Recommended for this computer</span>
+        <span class="os">Mac</span><span class="for">Apple Silicon (M1 and newer)</span>
+        <span class="file">{{asset:mac-arm}}</span>
+        <span class="get"><span>Download</span><span data-size="mac-arm"></span></span>
+      </a></li>
+      <li><a class="dl" data-dl="mac-intel" href="{{dl:mac-intel}}">
+        <span class="rec">Recommended for this computer</span>
+        <span class="os">Mac</span><span class="for">Intel</span>
+        <span class="file">{{asset:mac-intel}}</span>
+        <span class="get"><span>Download</span><span data-size="mac-intel"></span></span>
+      </a></li>
+      <li><a class="dl" data-dl="windows" href="{{dl:windows}}">
+        <span class="rec">Recommended for this computer</span>
+        <span class="os">Windows</span><span class="for">Windows 10/11 (64-bit)</span>
+        <span class="file">{{asset:windows}}</span>
+        <span class="get"><span>Download</span><span data-size="windows"></span></span>
+      </a></li>
+      <li><a class="dl" data-dl="linux" href="{{dl:linux}}">
+        <span class="rec">Recommended for this computer</span>
+        <span class="os">Linux</span><span class="for">x86_64, AppImage</span>
+        <span class="file">{{asset:linux}}</span>
+        <span class="get"><span>Download</span><span data-size="linux"></span></span>
+      </a></li>
+    </ul>
+    <p class="ver label" data-version-line hidden>Latest release: <span data-version></span></p>
+
+    <div class="notes">
+      <div>
+        <p>Supports: <strong>BOOX Note Max, firmware 4.2 (<code>TKQ1.230721.002</code>)</strong> only. Inkroot checks before it does anything.</p>
+        <p>Not sure which Mac you have? Open the Apple menu → <strong>About This Mac</strong>. “Chip: Apple M…” means Apple Silicon; “Processor: Intel” means Intel.</p>
+      </div>
+      <div>
+        <p>Windows may say <em>Windows protected your PC</em>: click <strong>More info → Run anyway</strong> (Inkroot isn't code-signed on Windows). On Linux, make the AppImage executable first: <code>chmod +x {{asset:linux}}</code>.</p>
+        <p class="muted">Every version and its release notes: <a href="https://github.com/n0dal/inkroot/releases">GitHub releases</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how-it-works" aria-labelledby="how-title">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="label">Root a BOOX with Magisk, safely</p>
+      <h2 id="how-title">How it works</h2>
+      <p>Three steps. Inkroot checks everything before it writes anything, and keeps a copy of your tablet's startup software so there's always a way back.</p>
+    </div>
+    <ol class="steps">
+      <li>
+        <div class="body">
+          <span class="num" aria-hidden="true"></span>
+          <h3>Plug in</h3>
+          <p>Turn on USB debugging and connect your Note Max. Inkroot checks the model, the firmware and the battery.</p>
+        </div>
+        <div class="screen"><img src="assets/screenshots/rescue-cable.png" width="880" height="640" loading="lazy" decoding="async"
+          alt="Inkroot step 1 of 4, Connect: “Plug in your Note Max”, with a line drawing of the tablet and a USB-C cable"></div>
+      </li>
+      <li>
+        <div class="body">
+          <span class="num" aria-hidden="true"></span>
+          <h3>Safety copy</h3>
+          <p>Inkroot reads your tablet's startup software (the <code>boot</code> partition) over Qualcomm EDL, checks it twice, and keeps it on your computer. Nothing is written without it.</p>
+        </div>
+        <div class="screen"><img src="assets/screenshots/root-step.png" width="880" height="640" loading="lazy" decoding="async"
+          alt="Inkroot writing to the tablet: a segmented progress bar and “The screen may stay blank. That's normal. Don't unplug it.”"></div>
+      </li>
+      <li>
+        <div class="body">
+          <span class="num" aria-hidden="true"></span>
+          <h3>Root</h3>
+          <p>Inkroot patches that copy on the tablet with Magisk 30.7, verified boot kept on, writes it back, reads it back to check it, and confirms root and the boot service are running.</p>
+        </div>
+        <div class="screen"><img src="assets/screenshots/done.png" width="880" height="640" loading="lazy" decoding="async"
+          alt="Inkroot done screen: root confirmed and the boot service running"></div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="callout" id="stuck" aria-labelledby="stuck-title">
+  <div class="callout-ramp" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <div>
+      <p class="label">Unbrick a BOOX · bootloop · black screen</p>
+      <h2 id="stuck-title">BOOX stuck on the ONYX logo?</h2>
+      <p>After a bad boot flash the tablet can look dead, hang on the logo or bootloop. That's almost always a soft brick. If you have a copy of its boot image, Inkroot's <strong>Rescue</strong> job walks you through the deep-flash cable step by step and writes it back.</p>
+      <div class="actions">
+        <a class="btn" href="rescue/">Read the rescue guide</a>
+      </div>
+    </div>
+    <div class="art">
+<svg viewBox="0 0 480 176" width="480" height="176" role="img" aria-labelledby="cable-title" shape-rendering="crispEdges" fill="none" stroke="currentColor" stroke-width="2">
+  <title id="cable-title">A Qualcomm deep-flash (EDL) cable: USB-A plug for the computer, a small button in the middle of the cable, USB-C plug for the tablet</title>
+  <defs>
+    <pattern id="d50" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="currentColor" stroke="none"/><rect x="2" y="2" width="2" height="2" fill="currentColor" stroke="none"/></pattern>
+    <pattern id="d25" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="currentColor" stroke="none"/></pattern>
+  </defs>
+  <rect x="9" y="69" width="50" height="38"/>
+  <rect x="17" y="81" width="34" height="8" fill="currentColor"/>
+  <rect x="59" y="61" width="52" height="54" fill="url(#d50)"/>
+  <path d="M111 88H189"/>
+  <rect x="189" y="61" width="102" height="54" fill="url(#d25)"/>
+  <rect x="219" y="73" width="42" height="30" fill="currentColor"/>
+  <path d="M240 13V53M231 44l9 9 9-9"/>
+  <path d="M291 88H371"/>
+  <rect x="371" y="65" width="46" height="46" fill="url(#d50)"/>
+  <rect x="417" y="76" width="44" height="24"/>
+  <rect x="425" y="85" width="28" height="6" fill="currentColor"/>
+  <g fill="currentColor" stroke="none" font-family="IBM Plex Mono, monospace" font-size="13" letter-spacing="1.5">
+    <text x="256" y="30">HOLD</text>
+    <text x="9" y="148">USB-A</text><text x="9" y="166">→ COMPUTER</text>
+    <text x="471" y="148" text-anchor="end">USB-C</text><text x="471" y="166" text-anchor="end">→ TABLET</text>
+    <text x="240" y="148" text-anchor="middle">BUTTON</text>
+  </g>
+</svg>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="why-edl" aria-labelledby="edl-title">
+  <div class="wrap split">
+    <div>
+      <p class="label">BOOX fastboot removed</p>
+      <h2 id="edl-title">Why EDL? Onyx removed fastboot</h2>
+    </div>
+    <div class="prose">
+      <!--@faq-answer:Why EDL and not fastboot?-->
+      <p>That's why rooting a BOOX on firmware 4.2 goes through Qualcomm's Emergency Download mode (EDL): it sits below the bootloader, so it can make a safety copy and write it back even when the tablet won't start. Inkroot uses the open-source <a href="https://github.com/bkerler/edl">bkerler/edl</a> client to do it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="label">Plain answers</p>
+      <h2 id="faq-title">Questions</h2>
+    </div>
+    <div class="faq">
+<!--@faq-->
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <nav class="links" aria-label="Project">
+      <a href="https://github.com/n0dal/inkroot">GitHub</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/DISCLAIMER.md">Disclaimer</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+      <a href="https://github.com/n0dal/inkroot/blob/main/LICENSE">MIT License</a>
+    </nav>
+    <p><!--@disclaimer--></p>
+    <p>Inkroot is not affiliated with, endorsed by, or sponsored by Onyx International / BOOX, Qualcomm, Google or the Magisk project.</p>
+    <p>Inkroot collects and sends nothing — no analytics, no telemetry, no account. Your safety copies stay on your computer and are never uploaded.</p>
+    <p class="muted">BOOX and ONYX are trademarks of their respective owners.</p>
+  </div>
+</footer>
+
+<script type="module">
+  import { init } from './js/downloads.js';
+  init(document);
+</script>
+</body>
+</html>
