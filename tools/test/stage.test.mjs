@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { zipSync } from "fflate";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { checkStaged, commit, planStaging, resolveTarget, stage } from "../lib/stage.mjs";
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
@@ -108,7 +109,7 @@ test("corrupt cache entry is re-downloaded", async () => {
 
 test("missing edl build for target fails with build hint", async () => {
   const fx = fixture({ edlTargets: ["darwin-aarch64"] });
-  await assert.rejects(run(fx, "linux-x86_64"), /tools\/\.build\/linux-x86_64\/edl.*python tools\/build_edl\.py --target linux-x86_64/);
+  await assert.rejects(run(fx, "linux-x86_64"), /tools[\\/]\.build[\\/]linux-x86_64[\\/]edl.*python tools\/build_edl\.py --target linux-x86_64/);
 });
 
 test("edl manifest mismatch fails naming the file", async () => {
@@ -280,9 +281,17 @@ test("checkStaged with lock detects hash mismatch", async () => {
 });
 
 test("CLI exit codes: 2 for usage, 1 for failed check", () => {
-  const cli = new URL("../stage-resources.mjs", import.meta.url).pathname;
-  assert.equal(spawnSync("node", [cli, "--bogus"]).status, 2);
-  assert.equal(spawnSync("node", [cli, "--target", "freebsd-x86_64"]).status, 2);
+  // fileURLToPath, not URL#pathname: on Windows the latter is "/D:/..." and
+  // node fails with "Cannot find module" (exit 1) before the CLI ever runs.
+  const cli = fileURLToPath(new URL("../stage-resources.mjs", import.meta.url));
+  const runCli = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
+  for (const args of [["--bogus"], ["--target", "freebsd-x86_64"]]) {
+    const r = runCli(...args);
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /usage: node tools\/stage-resources\.mjs/);
+  }
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), "cli-"));
-  assert.equal(spawnSync("node", [cli, "--check", "--target", "linux-x86_64", "--out", empty]).status, 1);
+  const r = runCli("--check", "--target", "linux-x86_64", "--out", empty);
+  assert.equal(r.status, 1, r.stderr);
+  assert.doesNotMatch(r.stderr, /usage:|Cannot find module/);
 });
