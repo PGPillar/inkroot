@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Inkroot",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "identifier": "io.github.n0dal.inkroot",
   "build": {
     "frontendDist": "../dist",
