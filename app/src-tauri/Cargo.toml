@@ -1,6 +1,6 @@
 [package]
 name = "inkroot"
-version = "0.1.5"
+version = "0.1.6"
 description = "Back up, root and rescue the ONYX BOOX Note Max"
 authors = ["Inkroot contributors"]
 license = "MIT"
