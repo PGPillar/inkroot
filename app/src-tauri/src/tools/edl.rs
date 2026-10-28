@@ -17,6 +17,11 @@ pub trait Edl: Send + Sync {
     ) -> Result<(), ToolError>;
     fn write(&self, part: &str, img: &Path, progress: &dyn Fn(u64, u64)) -> Result<(), ToolError>;
     fn reset(&self) -> Result<(), ToolError>;
+    /// `reset` for the best-effort paths (after a failure or cancel): a short timeout, so a
+    /// tablet that doesn't answer can't keep an `edl` process running for long.
+    fn reset_quick(&self) -> Result<(), ToolError> {
+        self.reset()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +141,15 @@ impl Edl for RealEdl {
 
     fn reset(&self) -> Result<(), ToolError> {
         self.exec(&EdlOp::Reset, self.timeouts.edl_reset, None, &|_, _| {})
+    }
+
+    fn reset_quick(&self) -> Result<(), ToolError> {
+        self.exec(
+            &EdlOp::Reset,
+            self.timeouts.edl_reset_quick,
+            None,
+            &|_, _| {},
+        )
     }
 }
 

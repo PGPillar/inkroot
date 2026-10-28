@@ -379,6 +379,10 @@ impl FlowEngine {
                 "cancel rejected: partition write in progress".into(),
             ));
         }
+        // Repeated presses while the flow winds down change nothing and aren't logged again.
+        if sh.cancel.is_cancelled() {
+            return Ok(());
+        }
         sh.cancel.cancel();
         let _ = sh.tx.send(Msg::Cancel);
         drop(st);

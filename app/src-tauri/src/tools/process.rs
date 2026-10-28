@@ -37,7 +37,64 @@ pub struct CmdOutput {
     pub stderr: String,
 }
 
-fn kill_tree(child: &mut Child) {
+/// Windows: a Job Object holding the child and everything it starts, so a cancel or timeout
+/// ends the whole tree for certain (`taskkill /T` walks parent PIDs and can miss processes).
+/// Breakaway is allowed so a daemon that asks for it (the adb server) can leave; the job is not
+/// kill-on-close, so closing it never touches a daemon that stayed in it.
+#[cfg(windows)]
+struct Job(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Job {
+    fn for_child(child: &Child) -> Option<Job> {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::System::JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+            SetInformationJobObject,
+        };
+        // SAFETY: plain FFI; every handle is checked, and owned by `Job` once created.
+        unsafe {
+            let h = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if h.is_null() {
+                return None;
+            }
+            let job = Job(h);
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+            SetInformationJobObject(
+                job.0,
+                JobObjectExtendedLimitInformation,
+                (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+            if AssignProcessToJobObject(job.0, child.as_raw_handle() as _) == 0 {
+                return None;
+            }
+            Some(job)
+        }
+    }
+
+    fn terminate(&self) {
+        // SAFETY: a valid job handle owned by `self`.
+        unsafe {
+            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Job {
+    fn drop(&mut self) {
+        // SAFETY: closed once; the job isn't kill-on-close, so nothing in it is touched.
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+/// Kills the child and everything it started, then reaps it.
+fn kill_tree(child: &mut Child, #[cfg(windows)] job: Option<&Job>) {
     let pid = child.id();
     #[cfg(unix)]
     {
@@ -49,14 +106,20 @@ fn kill_tree(child: &mut Child) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .creation_flags(0x08000000)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        match job {
+            Some(job) => job.terminate(),
+            // No job (assignment failed): walk the tree by parent PID instead.
+            None => {
+                let _ = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .creation_flags(0x08000000)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
     }
-    // Belt and braces (and the only effect if the group kill failed).
+    // Belt and braces: TerminateProcess / SIGKILL on the child itself.
     let _ = child.kill();
     let _ = child.wait();
 }
@@ -135,6 +198,12 @@ pub fn run_filtered(
 
     #[cfg(unix)]
     let pid = child.id();
+    #[cfg(windows)]
+    let job = Job::for_child(&child);
+    #[cfg(windows)]
+    let kill = |child: &mut Child| kill_tree(child, job.as_ref());
+    #[cfg(not(windows))]
+    let kill = |child: &mut Child| kill_tree(child);
     let (tx, rx) = mpsc::channel();
     let mut readers = Vec::new();
     if let Some(o) = child.stdout.take() {
@@ -173,16 +242,16 @@ pub fn run_filtered(
             Ok(Some(status)) => break Ok(status.code().unwrap_or(-1)),
             Ok(None) => {}
             Err(e) => {
-                kill_tree(&mut child);
+                kill(&mut child);
                 break Err(ToolError::Spawn(e.to_string()));
             }
         }
         if cancel.is_some_and(|c| c.is_cancelled()) {
-            kill_tree(&mut child);
+            kill(&mut child);
             break Err(ToolError::Cancelled);
         }
         if start.elapsed() >= timeout {
-            kill_tree(&mut child);
+            kill(&mut child);
             break Err(ToolError::Timeout {
                 tool: tool_name(spec),
                 secs: timeout.as_secs(),
@@ -385,5 +454,52 @@ mod tests {
         let e = r.unwrap_err();
         assert!(matches!(e, ToolError::Missing(_)));
         assert_eq!(FlowError::from(e).code, ErrorCode::ToolMissing);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use crate::clock::FakeClock;
+    use crate::events::Emitter;
+    use crate::ipc::{DeviceStatus, FlowState, LogLine, Progress};
+
+    struct Null;
+    impl Emitter for Null {
+        fn device(&self, _: &DeviceStatus) {}
+        fn flow_state(&self, _: &FlowState) {}
+        fn progress(&self, _: &Progress) {}
+        fn log(&self, _: &LogLine) {}
+    }
+
+    /// `cmd /c` starts `ping` as a grandchild that holds the pipes: cancel must end the whole
+    /// tree (the job), not only cmd, or the run would sit in the drain until ping exits.
+    #[test]
+    fn cancel_ends_the_tree() {
+        let log = LogStore::new(
+            Arc::new(Null),
+            Arc::new(FakeClock::new(chrono::Local::now())),
+        );
+        let spec = CmdSpec {
+            program: "cmd".into(),
+            args: vec!["/c".into(), "ping -n 30 127.0.0.1".into()],
+            env: vec![],
+        };
+        let tok = CancelToken::default();
+        let t2 = tok.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            t2.cancel();
+        });
+        let t = Instant::now();
+        let r = run(
+            &spec,
+            Duration::from_secs(60),
+            Some(&tok),
+            &log,
+            &mut |_| {},
+        );
+        assert!(matches!(r, Err(ToolError::Cancelled)), "{r:?}");
+        assert!(t.elapsed() < Duration::from_secs(5), "{:?}", t.elapsed());
     }
 }

@@ -64,6 +64,9 @@ pub struct Faults {
     pub reset_errors: u32,
     /// The next N `edl reset` calls report success but the tablet stays in EDL.
     pub reset_ignored: u32,
+    /// Every `edl reset` hangs until its timeout (the tablet doesn't answer) and the tablet
+    /// stays in EDL.
+    pub reset_hangs: bool,
 }
 
 /// Real-time pauses the fake tools take, so demo mode feels like the real thing. All zero by
@@ -150,6 +153,8 @@ pub struct World {
     pub delays: Delays,
     /// When `FakeUsb::edl_device` was first polled (drives `Faults::edl_appears_after`).
     pub edl_poll_started: Option<Instant>,
+    /// How many of the `EdlReset` calls were best-effort (`reset_quick`) ones.
+    pub quick_resets: u32,
 }
 
 impl World {
@@ -636,6 +641,9 @@ impl Edl for FakeEdl {
         if w.mode != Mode::Edl {
             return Err(edl_err("no Qualcomm device in EDL mode"));
         }
+        if w.faults.reset_hangs {
+            return Err(edl_timeout());
+        }
         if w.faults.reset_errors > 0 {
             w.faults.reset_errors = w.faults.reset_errors.saturating_sub(1);
             return Err(edl_err(
@@ -649,6 +657,11 @@ impl Edl for FakeEdl {
         w.mode = Mode::Off;
         w.pending_boot = true;
         Ok(())
+    }
+
+    fn reset_quick(&self) -> Result<(), ToolError> {
+        self.world.lock().quick_resets += 1;
+        self.reset()
     }
 }
 

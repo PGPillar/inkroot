@@ -65,6 +65,8 @@ pub struct Timeouts {
     pub edl_read: Duration,
     pub edl_write: Duration,
     pub edl_reset: Duration,
+    /// `edl reset` on the best-effort paths (after a failure or cancel).
+    pub edl_reset_quick: Duration,
     pub wait_edl: Duration,
     pub wait_boot: Duration,
     pub wait_bootsvc: Duration,
@@ -82,6 +84,7 @@ impl Default for Timeouts {
             edl_read: Duration::from_secs(600),
             edl_write: Duration::from_secs(900),
             edl_reset: Duration::from_secs(60),
+            edl_reset_quick: Duration::from_secs(15),
             wait_edl: Duration::from_secs(60),
             wait_boot: Duration::from_secs(180),
             wait_bootsvc: Duration::from_secs(90),
@@ -228,6 +231,7 @@ mod tests {
         let t = Timeouts::default();
         assert_eq!(t.edl_read, Duration::from_secs(600));
         assert_eq!(t.edl_write, Duration::from_secs(900));
+        assert_eq!(t.edl_reset_quick, Duration::from_secs(15));
         assert_eq!(t.poll, Duration::from_millis(1500));
     }
 

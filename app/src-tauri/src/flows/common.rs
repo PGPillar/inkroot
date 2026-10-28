@@ -9,6 +9,7 @@ use crate::ipc::{
     SuggestedAction,
 };
 use crate::profile::{DeviceProfile, MIN_BATTERY};
+use crate::tools::ToolError;
 use crate::tools::adb::{AdbState, RebootTarget};
 use crate::tools::process::CancelToken;
 use crate::tools::usb::EdlUsbInfo;
@@ -499,6 +500,10 @@ fn edl_left(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
 /// Sends `edl reset` up to `RESET_ATTEMPTS` times, until the tablet has left EDL. A reset
 /// that errors, or one that "succeeds" while the 9008 device is still there `RESET_SETTLE`
 /// later, is retried. Returns whether the tablet left EDL.
+///
+/// `cancellable` is false on the best-effort paths (after a failure or cancel): there each
+/// reset has a short timeout, and one that times out isn't retried, so a tablet that doesn't
+/// answer never keeps `edl` running for minutes.
 fn reset_attempts(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
     let d = ctx.deps();
     for attempt in 1..=RESET_ATTEMPTS {
@@ -507,8 +512,16 @@ fn reset_attempts(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
                 "Trying the restart again (attempt {attempt} of {RESET_ATTEMPTS})"
             ));
         }
-        if let Err(e) = d.edl.reset() {
+        let r = if cancellable {
+            d.edl.reset()
+        } else {
+            d.edl.reset_quick()
+        };
+        if let Err(e) = r {
             ctx.info(&format!("The restart command reported a problem: {e}"));
+            if !cancellable && matches!(e, ToolError::Timeout { .. }) {
+                return Ok(d.usb.edl_device().is_none());
+            }
         }
         if edl_left(ctx, cancellable)? {
             return Ok(true);

@@ -422,3 +422,62 @@ fn backup_read_failure_resets_only_once() {
         1
     );
 }
+
+#[test]
+fn backup_read_failure_reset_is_quick_and_a_hanging_one_is_not_retried() {
+    let h = harness(stock_world());
+    {
+        let mut w = h.world.lock();
+        w.faults.read_fails_on = Some("boot_a".into());
+        w.faults.reset_hangs = true;
+    }
+    let end = run_to_end(&h, FlowKind::Backup, FlowOptions::default(), &[]);
+    assert_eq!(end.status, FlowStatus::Failed, "{end:?}");
+    let resets = h
+        .world
+        .calls()
+        .iter()
+        .filter(|c| matches!(c, Call::EdlReset))
+        .count();
+    // One short-timeout attempt; a reset that hangs isn't run again (and again).
+    assert_eq!(resets, 1);
+    assert_eq!(h.world.lock().quick_resets, 1);
+    assert!(
+        h.events
+            .logs()
+            .iter()
+            .any(|l| l.line.contains("Hold its power button")),
+        "{:?}",
+        h.events.logs()
+    );
+}
+
+#[test]
+fn backup_cancel_mid_read_ends_and_logs_cancel_once() {
+    let h = harness(stock_world());
+    h.world.lock().delays.read = std::time::Duration::from_millis(400);
+    let id = h
+        .engine
+        .start(FlowKind::Backup, FlowOptions::default())
+        .unwrap();
+    wait_state(&h, &id, |s| s.step == StepId::ReadPartitions);
+    for _ in 0..5 {
+        h.engine.cancel(&id).unwrap();
+    }
+    let end = wait_terminal(&h, &id);
+    assert_eq!(end.status, FlowStatus::Cancelled, "{end:?}");
+    let n = h
+        .events
+        .logs()
+        .iter()
+        .filter(|l| l.line == "Cancel requested")
+        .count();
+    assert_eq!(n, 1, "{:?}", h.events.logs());
+    // The best-effort restart after the cancel is the short one.
+    assert!(h.world.lock().quick_resets >= 1);
+    assert!(
+        h.engine
+            .current()
+            .is_some_and(|s| s.status == FlowStatus::Cancelled)
+    );
+}
