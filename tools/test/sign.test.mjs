@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { findMachO, signAll, verifyAll } from '../lib/sign-macos.mjs';
+import { findFrameworkBundles, findMachO, signAll, verifyAll } from '../lib/sign-macos.mjs';
+import { makePythonFramework } from './python-framework.mjs';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'inkroot-sign-'));
 const put = (root, rel, bytes) => { const p = path.join(root, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, Buffer.from(bytes)); return p; };
@@ -22,6 +23,16 @@ test('findMachO lists thin/fat Mach-O only, deepest first, ignoring symlinks', a
   const found = await findMachO(d);
   assert.deepEqual([...found].sort(), [edl, fat, dylib].sort());
   assert.equal(found[0], dylib);
+});
+
+test('framework-build Python.framework: only the real Mach-O is found, links (incl. to dirs) never read; bundle is Versions/<ver>', async () => {
+  const d = tmp();
+  const internal = path.join(d, 'tools/edl/_internal');
+  makePythonFramework(internal, Buffer.concat([hex('cffaedfe'), Buffer.alloc(16)]));
+  assert.deepEqual(await findMachO(d), [path.join(internal, 'Python.framework/Versions/3.12/Python')]);
+  assert.deepEqual(await findFrameworkBundles(d), [path.join(internal, 'Python.framework/Versions/3.12')]);
+  fs.mkdirSync(path.join(d, 'Shallow.framework'));
+  assert.deepEqual(await findFrameworkBundles(d), [path.join(internal, 'Python.framework/Versions/3.12'), path.join(d, 'Shallow.framework')]);
 });
 
 test('signAll with no identity skips with a log line', async () => {

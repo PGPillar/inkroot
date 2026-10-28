@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkStaged, resolveTarget, sha256File, stage } from "./lib/stage.mjs";
+import { checkStaged, describeStaged, resolveTarget, stage } from "./lib/stage.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -48,7 +48,7 @@ async function main(argv) {
     const signDir = await loadSigner(target, process.env);
     const { files } = await stage({ lock, target, repoRoot, outDir, cacheDir: path.join(here, ".cache"),
       placeholders: opts.placeholders, log: (m) => console.error(m), signDir });
-    for (const f of files) console.log(`${(await sha256File(path.join(outDir, f))).slice(0, 12)}  ${f}`);
+    for (const line of await describeStaged(outDir, files)) console.log(line);
     return 0;
   } catch (e) { console.error(e.message); return 1; }
 }

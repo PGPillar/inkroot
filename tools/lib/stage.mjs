@@ -306,6 +306,19 @@ export async function stage({ lock, target, repoRoot, outDir, fetchImpl = global
   }
 }
 
+/** One line per staged path: sha256 prefix for regular files, "-> target" for symlinks (never followed: a link may name a directory). */
+export async function describeStaged(outDir, files) {
+  const lines = [];
+  for (const f of files) {
+    const p = path.join(outDir, f);
+    const st = await fsp.lstat(p);
+    if (st.isSymbolicLink()) lines.push(`${"link".padEnd(12)}  ${f} -> ${await fsp.readlink(p)}`);
+    else if (st.isFile()) lines.push(`${(await sha256File(p)).slice(0, 12)}  ${f}`);
+    else throw new Error(`${f}: staged path is neither a regular file nor a symlink`);
+  }
+  return lines;
+}
+
 /** Verifies a staged tree: all contract paths exist, none are placeholders; with lock, pinned hashes match. */
 export function checkStaged(outDir, target, lock) {
   const problems = [];

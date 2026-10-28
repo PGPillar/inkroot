@@ -1,5 +1,7 @@
 // Signs every nested Mach-O under a staged dir (Developer ID + hardened runtime + timestamp) so notarization passes.
 // Symlinks are never followed or signed; their targets are regular files signed once.
+// Versioned frameworks (e.g. a framework-build Python's Python.framework) are signed as bundles via
+// Foo.framework/Versions/<ver> after their inner Mach-Os, as Apple recommends; the Current/top-level links are left alone.
 import { execFile } from "node:child_process";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -13,6 +15,7 @@ export const EDL_ENTITLEMENTS = path.join(here, "..", "macos", "entitlements.edl
 const MACHO = new Set(["feedface", "feedfacf", "cefaedfe", "cffaedfe"]);
 
 async function isMachO(p) {
+  if (!(await fsp.lstat(p)).isFile()) return false; // never read through a symlink or a directory
   const fh = await fsp.open(p, "r");
   try {
     const b = Buffer.alloc(8);
@@ -43,6 +46,24 @@ export async function findMachO(dir) {
   return (await walk(dir, { files: [], frameworks: [] })).files.sort(deepestFirst);
 }
 
+/** Real (non-symlink) version dirs under fw/Versions, or [fw] for an unversioned (shallow) framework. */
+async function frameworkBundles(fw) {
+  const versions = path.join(fw, "Versions");
+  const st = await fsp.lstat(versions).catch(() => null);
+  if (!st?.isDirectory()) return [fw];
+  const out = [];
+  for (const e of await fsp.readdir(versions, { withFileTypes: true })) if (e.isDirectory()) out.push(path.join(versions, e.name));
+  return out;
+}
+
+/** Signable bundle paths of every framework under dir (Versions/<ver> or the shallow .framework), deepest first. */
+export async function findFrameworkBundles(dir) {
+  const { frameworks } = await walk(dir, { files: [], frameworks: [] });
+  const out = [];
+  for (const fw of frameworks) out.push(...(await frameworkBundles(fw)));
+  return out.sort(deepestFirst);
+}
+
 /** Only edl's main executable gets entitlements (PyInstaller bootloader loads its own unsigned-team libs). */
 export const defaultEntitlementsFor = (root) => (p) =>
   path.relative(root, p).split(path.sep).join("/") === "tools/edl/edl" ? EDL_ENTITLEMENTS : null;
@@ -50,19 +71,19 @@ export const defaultEntitlementsFor = (root) => (p) =>
 export async function signAll(dir, identity, { entitlementsFor = defaultEntitlementsFor(dir), log = (m) => console.error(m) } = {}) {
   if (!identity) { log("APPLE_SIGNING_IDENTITY not set; skipping macOS signing"); return; }
   const stamp = identity === "-" ? "--timestamp=none" : "--timestamp"; // ad-hoc is local-only (tests)
-  const { files, frameworks } = await walk(dir, { files: [], frameworks: [] });
-  files.sort(deepestFirst);
+  const files = await findMachO(dir);
+  const bundles = await findFrameworkBundles(dir);
   const sign = (p, ent) => run("codesign", ["--force", stamp, "--options", "runtime", "--sign", identity, ...(ent ? ["--entitlements", ent] : []), p]);
   for (const f of files) await sign(f, entitlementsFor(f));
-  for (const fw of frameworks.sort(deepestFirst)) await sign(fw, null);
-  log(`signed ${files.length} Mach-O file(s) and ${frameworks.length} framework(s)`);
+  for (const b of bundles) await sign(b, null);
+  log(`signed ${files.length} Mach-O file(s) and ${bundles.length} framework bundle(s)`);
 }
 
 /** Returns {ok, problems}. teamId defaults to env APPLE_TEAM_ID. */
 export async function verifyAll(dir, teamId = process.env.APPLE_TEAM_ID) {
   const problems = [];
   if (!teamId) problems.push("APPLE_TEAM_ID is not set; cannot check TeamIdentifier");
-  for (const f of await findMachO(dir)) {
+  for (const f of [...(await findMachO(dir)), ...(await findFrameworkBundles(dir))]) {
     const rel = path.relative(dir, f);
     let info;
     try { info = (await run("codesign", ["-dv", "--verbose=4", f])).stderr; }

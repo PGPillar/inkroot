@@ -7,7 +7,9 @@ import path from "node:path";
 import { zipSync } from "fflate";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { checkStaged, commit, planStaging, resolveTarget, stage } from "../lib/stage.mjs";
+import { checkStaged, commit, describeStaged, planStaging, resolveTarget, stage } from "../lib/stage.mjs";
+import { findMachO, signAll, verifyAll } from "../lib/sign-macos.mjs";
+import { makePythonFramework } from "./python-framework.mjs";
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const enc = (s) => new TextEncoder().encode(s);
@@ -208,6 +210,66 @@ test("symlinks in the onedir are recorded, verified and recreated as symlinks", 
   assert.equal(fs.lstatSync(l).isSymbolicLink(), true);
   assert.equal(fs.readlinkSync(l), "lib.so");
   assert.equal(fs.lstatSync(path.join(fx.outDir, "tools/edl/_internal/libdir")).isSymbolicLink(), true);
+});
+
+/** Adds a framework-build Python.framework (with directory symlinks) to the fixture's edl onedir and manifest. */
+function addPythonFramework(fx, target, pythonBytes) {
+  const dir = path.join(fx.root, `tools/.build/${target}/edl`);
+  const { files, links } = makePythonFramework(path.join(dir, "_internal"), pythonBytes);
+  const mp = path.join(fx.root, `tools/.build/${target}/edl.manifest.json`);
+  const m = JSON.parse(fs.readFileSync(mp, "utf8"));
+  for (const [rel, b] of Object.entries(files)) m.files[`_internal/${rel}`] = sha(b);
+  for (const [rel, t] of Object.entries(links)) m.links = { ...m.links, [`_internal/${rel}`]: t };
+  fs.writeFileSync(mp, JSON.stringify(m));
+}
+
+test("framework-build Python.framework links (some to directories) are staged as links and listed without reading them", { skip: process.platform === "win32" && "symlinks" }, async () => {
+  const fx = fixture();
+  addPythonFramework(fx, "darwin-aarch64", "fake python");
+  const { files } = await run(fx, "darwin-aarch64");
+  const fw = path.join(fx.outDir, "tools/edl/_internal/Python.framework");
+  for (const [rel, t] of [["Versions/Current", "3.12"], ["Python", "Versions/Current/Python"], ["Resources", "Versions/Current/Resources"], ["../Python", "Python.framework/Versions/3.12/Python"]]) {
+    assert.equal(fs.lstatSync(path.join(fw, rel)).isSymbolicLink(), true, rel);
+    assert.equal(fs.readlinkSync(path.join(fw, rel)), t);
+  }
+  assert.equal(fs.readFileSync(path.join(fw, "Resources/Info.plist"), "utf8").includes("CFBundleExecutable"), true);
+  const lines = await describeStaged(fx.outDir, files); // used to hit EISDIR hashing Resources -> dir
+  assert.ok(lines.includes("link          tools/edl/_internal/Python.framework/Resources -> Versions/Current/Resources"));
+  assert.ok(lines.some((l) => l === `${sha("fake python").slice(0, 12)}  tools/edl/_internal/Python.framework/Versions/3.12/Python`));
+});
+
+test("framework-build Python.framework retargeted Current link is rejected", { skip: process.platform === "win32" && "symlinks" }, async () => {
+  const fx = fixture();
+  addPythonFramework(fx, "darwin-aarch64", "fake python");
+  const cur = path.join(fx.root, "tools/.build/darwin-aarch64/edl/_internal/Python.framework/Versions/Current");
+  fs.rmSync(cur); fs.symlinkSync("../..", cur);
+  await assert.rejects(run(fx, "darwin-aarch64"), /link _internal\/Python\.framework\/Versions\/Current: expected -> 3\.12/);
+});
+
+test("staging + ad-hoc signing a framework-build onedir signs the framework bundle and passes strict verification", { skip: process.platform !== "darwin" && "codesign needs macOS" }, async () => {
+  const fx = fixture();
+  const edlBin = path.join(fx.root, "tools/.build/darwin-aarch64/edl/edl");
+  fs.copyFileSync("/usr/bin/true", edlBin);
+  const mp = path.join(fx.root, "tools/.build/darwin-aarch64/edl.manifest.json");
+  const m = JSON.parse(fs.readFileSync(mp, "utf8"));
+  m.files.edl = sha(fs.readFileSync(edlBin)); fs.writeFileSync(mp, JSON.stringify(m));
+  addPythonFramework(fx, "darwin-aarch64", fs.readFileSync("/usr/bin/true"));
+  const logs = [];
+  let verify;
+  await run(fx, "darwin-aarch64", { signDir: async (d) => { await signAll(d, "-", { log: (l) => logs.push(l) }); verify = await verifyAll(d, "ABCDE12345"); } });
+  assert.match(logs.join("\n"), /1 framework bundle/);
+  assert.ok(!verify.problems.some((p) => /not signed|--verify failed|runtime|EISDIR/.test(p)), verify.problems.join("\n"));
+  assert.ok(verify.problems.some((p) => /_internal\/Python\.framework\/Versions\/3\.12: TeamIdentifier/.test(p)), "framework bundle is checked");
+  const fw = path.join(fx.outDir, "tools/edl/_internal/Python.framework");
+  assert.equal(fs.existsSync(path.join(fw, "Versions/3.12/_CodeSignature/CodeResources")), true);
+  assert.equal(fs.lstatSync(path.join(fw, "Versions/Current")).isSymbolicLink(), true);
+  const cs = (...a) => spawnSync("codesign", a, { encoding: "utf8" });
+  for (const p of [fw, path.join(fw, "Versions/3.12"), path.join(fx.outDir, "tools/edl/edl")]) {
+    const r = cs("--verify", "--strict", p);
+    assert.equal(r.status, 0, `${p}: ${r.stderr}`);
+  }
+  assert.equal(cs("--verify", "--deep", "--strict", path.join(fx.outDir, "tools/edl/edl")).status, 0);
+  assert.ok((await findMachO(fx.outDir)).every((f) => fs.lstatSync(f).isFile()));
 });
 
 test("symlink problems are collected, not thrown: unlisted, escaping, retargeted", async () => {
