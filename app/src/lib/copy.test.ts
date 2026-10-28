@@ -2,14 +2,14 @@ import { describe, expect, test } from 'vitest';
 import { ALL_ERROR_CODES, ALL_PROMPT_KINDS, ALL_STEP_IDS, FLOW_KINDS, FLOW_STEPS, FLOW_STEP_COUNT } from './flows';
 import {
   CABLE_GUIDE, CANCELLED_COPY, DONE_COPY, ERROR_HEADINGS, GATE_COPY, GROUP_LABELS, HOME_COPY, PROMPT_COPY,
-  RISK_COPY, STEP_COPY, WRITING_NOTE, fill, stepLabel,
+  RESCUE_DONE, RESCUE_WAIT, RISK_COPY, STEP_COPY, WRITING_NOTE, fill, stepLabel,
 } from './copy';
 
 const stripTech = (o: unknown): unknown => JSON.parse(JSON.stringify(o, (k, v) => (k === 'tech' ? undefined : v)));
 
 test('ALL_* lists match the contract unions', () => {
   expect(new Set(ALL_STEP_IDS).size).toBe(20);
-  expect(ALL_PROMPT_KINDS).toHaveLength(9);
+  expect(ALL_PROMPT_KINDS).toHaveLength(10);
   expect(ALL_ERROR_CODES).toHaveLength(19);
   expect(new Set([...Object.values(FLOW_STEPS).flat(), 'done'])).toEqual(new Set(ALL_STEP_IDS));
 });
@@ -27,6 +27,7 @@ test.each(ALL_PROMPT_KINDS)('prompt copy for %s labels every contract option', (
     cableCheck: ['have', 'whereToGet', 'continueWithout'], cableCheckConfirm: ['confirmContinue', 'back'], chooseSlot: ['a', 'b'],
     keepWaitingOrRescue: ['keepWaiting', 'goToRescue'], installDriver: ['install', 'cancel'], installUdev: ['install', 'cancel'],
     edlNotFound: ['retry', 'cancel'], retryWrite: ['retry', 'cancel'], stillInEdl: ['retry', 'heldPower'],
+    tabletStarting: ['homeScreen'],
   }[k];
   expect(Object.keys(PROMPT_COPY[k].options).sort()).toEqual([...ids].sort());
 });
@@ -37,7 +38,7 @@ test('stepLabel', () => {
 });
 test('fill leaves unknown keys visible', () => expect(fill('a {x} {y}', { x: 1 })).toBe('a 1 {y}'));
 test('main-path copy has no jargon', () => {
-  const main = JSON.stringify([STEP_COPY, DONE_COPY, PROMPT_COPY, GATE_COPY, HOME_COPY].map(stripTech));
+  const main = JSON.stringify([STEP_COPY, DONE_COPY, PROMPT_COPY, GATE_COPY, HOME_COPY, RESCUE_WAIT, RESCUE_DONE].map(stripTech));
   for (const w of ['adb', 'EDL', '9008', 'fastboot', 'partition', 'SHA', 'verity', 'sideload']) expect(main).not.toMatch(new RegExp(`\\b${w}\\b`));
 });
 describe('voice anchors', () => {
@@ -56,4 +57,23 @@ test('cancelled and writing copy', () => {
     back: 'Back to start',
   });
   expect(WRITING_NOTE).toBe('writing · please keep it plugged in');
+});
+
+test('rescue ending copy', () => {
+  expect(RESCUE_WAIT.checklist).toEqual([
+    '✓ Written to your tablet',
+    '✓ Checked — it matches your safety copy',
+    '… Waiting for your tablet to start (up to 5 min)',
+  ]);
+  expect(RESCUE_WAIT.done).toBe('Done — I can see my home screen');
+  expect(RESCUE_DONE.tabletBack).toEqual({
+    heading: 'Your tablet is back ✓',
+    body: 'We wrote your safety copy, checked it, and your tablet has started up again.',
+  });
+  expect(RESCUE_DONE.notSeen.heading).toBe('Written and checked ✓');
+  expect(RESCUE_DONE.notSeen.body).toBe(
+    "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
+  );
+  expect(RESCUE_DONE.notSeen.note).toMatch(/USB debugging is off/);
+  expect(PROMPT_COPY.tabletStarting.options.homeScreen).toBe(RESCUE_WAIT.done);
 });

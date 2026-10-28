@@ -324,6 +324,8 @@ Engine rules (the same rules the real backend has): `startFlow` rejects with `st
 | `import-bad-image` | ready | importBackup fail `badImage` |
 | `import-rescue-only` | none | importBackup done with `IMPORTED_RESCUE_ONLY` |
 | `rescue-edl-not-found` | none | rescue waitEdl → `edlNotFound` after 6 s; `retry` → found |
+| `rescue-back` / `rescue-not-seen` / `rescue-home-screen` / `rescue-back-in-edl` | edl | rescue ends with `rescueOutcome` tabletBack (device, not rooted) / notSeen / homeScreenSeen (after the `tabletStarting` answer) / backInEdl |
+| `shot-rescue-waiting` / `shot-rescue-back` / `shot-rescue-not-seen` / `shot-rescue-back-in-edl` | — | frozen rescue step 4 and done variants with a long log (e2e/layout.spec.ts) |
 | `reinstall-hook-absent` | rooted | reinstall checkDevice → state `{kind:'root', stepIndex:2, stepCount:4}` → continues the root script |
 | `windows-driver` | edl, os `windows` | rescue starts with `installDriver` prompt |
 | `linux-udev` | edl, os `linux` | rescue starts with `installUdev` prompt |
@@ -505,7 +507,7 @@ export const FLOW_STEPS: Record<FlowKind, StepId[]> = {
   backup: ['checkDevice','enterEdl','readPartitions','verifyBackup','rebootToSystem'],
   importBackup: ['pickImage','stockCheck','chooseSlot','saveImport'],
   root: ['checkDevice','enterEdl','readPartitions','verifyBackup','rebootToSystem','patch','cableCheck','write','verifyWrite','reset','waitBoot','verifyRoot'],
-  rescue: ['pickImage','chooseSlot','cableGuide','waitEdl','write','verifyWrite','reset'],
+  rescue: ['pickImage','chooseSlot','cableGuide','waitEdl','write','verifyWrite','reset','waitBoot'],
   unroot: ['checkDevice','enterEdl','write','verifyWrite','reset','waitBoot'],
   reinstallBootService: ['checkDevice','pushScripts','waitBoot','verifyRoot'],
 }; // 'done' is rendered by DoneView for every kind
@@ -533,7 +535,7 @@ The tables below are the **exact copy**. `{x}` marks an interpolation. Labels ar
 | backup | Check | Get ready | Copy | Verify |
 | importBackup | Open | Check | Save | |
 | root | Check | Safety copy | Rooting | Restart |
-| rescue | Your file | Cable | Connect | Writing |
+| rescue | Your file | Cable | Writing | Starting up |
 | unroot | Check | Restoring | Restart | |
 | reinstallBootService | Check | Reinstall | | |
 
@@ -568,6 +570,7 @@ Done label `Done`; failed label `Stopped`. Out-of-range index → `STEP {i} OF {
 | rescue · pickImage | Checking your file | Making sure it's a good startup image for your tablet. | ANDROID! magic, size check |
 | rescue · chooseSlot | Which slot should we fix? | One quick question. | |
 | rescue · cableGuide / waitEdl | (rendered by CableGuide, see CABLE_GUIDE) | | waiting for USB 05c6:9008 |
+| rescue · waitBoot (RescueWait) | Written and checked ✓ | Your tablet is starting up. This can take a few minutes. Checklist `RESCUE_WAIT`: "✓ Written to your tablet" · "✓ Checked — it matches your safety copy" · "… Waiting for your tablet to start (up to 5 min)"; button "Done — I can see my home screen" (answers `tabletStarting` → homeScreen) | watching adb devices quietly (up to 5 min); 9008 again = back in rescue mode |
 | reinstallBootService · pushScripts | Reinstalling the boot service | Copying the boot service back onto your tablet. Your startup software isn't touched. | push bootsvc.sh + service.sh → /data/local/tmp |
 
 **DONE_COPY**
@@ -580,8 +583,11 @@ Done label `Done`; failed label `Stopped`. Out-of-range index → `STEP {i} OF {
 | root | Your Note Max is rooted. | Magisk {magiskVersion} is running, and so is the boot service. Your backup is in Documents/Inkroot. Keep it. | Magisk daemon alive · Boot service running as root · Backup kept safe |
 | root tip `ROOT_TIP` | One more thing | Onyx puts apps it thinks are idle to sleep, which can stop root apps from working. On your tablet, open Settings → Battery → App freeze, turn off "Freeze new apps", and allow your apps to start automatically. | |
 | root link `ROOT_MORE` | What can I do with root? → | (opens BOOT_SERVICE_DOCS_URL) | |
-| rescue | Unplug the cable and start your tablet. | Unplug the deep-flash cable, put your tablet on its normal charger, and hold the power button for about 5 seconds. | |
-| rescue live `RESCUE_BACK` | waiting for it to start… / It's back ✓ Your tablet started. | | |
+| rescue · tabletBack `RESCUE_DONE` | Your tablet is back ✓ | We wrote your safety copy, checked it, and your tablet has started up again. + "It's rooted." / "It's not rooted." when `result.device` is known | |
+| rescue · homeScreenSeen | Your tablet is back ✓ | We wrote your safety copy, checked it, and you've seen your tablet start up again. | |
+| rescue · notSeen (also `DONE_COPY.rescue`) | Written and checked ✓ | Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again. Note: "Inkroot can't see your tablet when USB debugging is off, which is common after a rescue. That's okay." | |
+| rescue · backInEdl | Your tablet went back to rescue mode | We wrote your safety copy and checked it, but your tablet restarted into rescue mode instead of starting up. Hold the power button for 10 seconds to restart it. If it lands in rescue mode again, run Rescue again with a different saved copy. Button: "Run Rescue again" | |
+| rescue live `RESCUE_BACK` (notSeen, then the poller sees it) | It's back ✓ Your tablet started. | | |
 | unroot | Your Note Max is back to stock. | Root is removed and the original startup software is back. Your safety copies are still in Documents/Inkroot. | Original startup software restored · Root removed |
 | reinstallBootService | The boot service is running again. | It starts as root every time your tablet starts. | Boot service running as root |
 

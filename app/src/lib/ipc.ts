@@ -79,7 +79,8 @@ export interface Prompt {
     | 'installUdev'
     | 'edlNotFound'
     | 'retryWrite'
-    | 'stillInEdl';
+    | 'stillInEdl'
+    | 'tabletStarting';
   options: PromptOption[];
 }
 
@@ -96,9 +97,13 @@ export interface FlowError {
   suggestedAction: 'retry' | 'goToRescue' | 'reconnect' | 'chargeDevice' | 'importBackup' | null;
 }
 
+export type RescueOutcome = 'tabletBack' | 'notSeen' | 'homeScreenSeen' | 'backInEdl';
+
 export interface FlowResult {
   backup?: BackupSummary;
   magiskVersion?: string;
+  rescueOutcome?: RescueOutcome;
+  device?: DeviceInfo;
 }
 
 export interface FlowState {

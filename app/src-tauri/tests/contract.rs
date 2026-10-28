@@ -120,6 +120,13 @@ fn enums_serialize_as_contract_literals() {
         (PromptKind::EdlNotFound, "edlNotFound"),
         (PromptKind::RetryWrite, "retryWrite"),
         (PromptKind::StillInEdl, "stillInEdl"),
+        (PromptKind::TabletStarting, "tabletStarting"),
+    ]);
+    check(vec![
+        (RescueOutcome::TabletBack, "tabletBack"),
+        (RescueOutcome::NotSeen, "notSeen"),
+        (RescueOutcome::HomeScreenSeen, "homeScreenSeen"),
+        (RescueOutcome::BackInEdl, "backInEdl"),
     ]);
     check(vec![
         (ErrorCode::NoDevice, "noDevice"),
@@ -189,6 +196,24 @@ fn enums_serialize_as_contract_literals() {
         (BackupSource::Imported, "imported"),
     ]);
     check(vec![(Slot::A, "a"), (Slot::B, "b")]);
+}
+
+#[test]
+fn rescue_result_shape() {
+    assert_eq!(
+        ser(&FlowResult {
+            rescue_outcome: Some(RescueOutcome::NotSeen),
+            ..FlowResult::default()
+        }),
+        json!({"rescueOutcome":"notSeen"})
+    );
+    let back = ser(&FlowResult {
+        rescue_outcome: Some(RescueOutcome::TabletBack),
+        device: Some(info()),
+        ..FlowResult::default()
+    });
+    assert_eq!(back["rescueOutcome"], "tabletBack");
+    assert_eq!(back["device"]["rooted"], true);
 }
 
 #[test]
@@ -344,8 +369,14 @@ fn round_trip_all() {
     let res = FlowResult {
         backup: Some(backup()),
         magisk_version: Some("30.7".into()),
+        ..FlowResult::default()
     };
     rt(res.clone());
+    rt(FlowResult {
+        rescue_outcome: Some(RescueOutcome::TabletBack),
+        device: Some(info()),
+        ..FlowResult::default()
+    });
     rt(FlowState {
         prompt: Some(prompt),
         error: Some(err),

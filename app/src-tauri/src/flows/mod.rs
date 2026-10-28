@@ -125,6 +125,11 @@ pub fn prompt_options(kind: PromptKind) -> Vec<PromptOption> {
             opt("retry", "Try restarting again", Primary),
             opt("heldPower", "I've restarted it", Secondary),
         ],
+        PromptKind::TabletStarting => vec![opt(
+            "homeScreen",
+            "Done — I can see my home screen",
+            Primary,
+        )],
         PromptKind::EdlNotFound | PromptKind::RetryWrite => vec![
             opt("retry", "Try again", Primary),
             opt("cancel", "Cancel", Secondary),
@@ -589,6 +594,48 @@ impl FlowCtx {
                         s.status = FlowStatus::Running;
                         s.prompt = None;
                     });
+                    return Err(Interrupt::Cancelled);
+                }
+            }
+        }
+    }
+
+    /// Shows a prompt without blocking: the flow keeps working and checks `poll_answer`.
+    pub fn offer(&self, kind: PromptKind) -> Prompt {
+        let prompt = Prompt {
+            id: uuid::Uuid::new_v4().to_string(),
+            kind,
+            options: prompt_options(kind),
+        };
+        self.info(&format!("Offering: {}", lit(&kind)));
+        let p = prompt.clone();
+        self.update(|s| {
+            s.status = FlowStatus::WaitingForUser;
+            s.prompt = Some(p);
+        });
+        prompt
+    }
+
+    /// The answer to an `offer`ed prompt, if one has arrived (never blocks). A cancel request
+    /// is `Err`. Either way the prompt stays up; the caller moves on with `step`/`sub_step`.
+    pub fn poll_answer(&self, prompt: &Prompt) -> Result<Option<String>, Interrupt> {
+        self.check_cancel()?;
+        let rx = self.rx.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            match rx.try_recv() {
+                Ok(Msg::Answer {
+                    prompt_id,
+                    option_id,
+                }) if prompt_id == prompt.id
+                    && prompt.options.iter().any(|o| o.id == option_id) =>
+                {
+                    self.info(&format!("You chose: {option_id}"));
+                    return Ok(Some(option_id));
+                }
+                Ok(Msg::Answer { .. }) => continue,
+                Ok(Msg::Cancel) => return Err(Interrupt::Cancelled),
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(None),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     return Err(Interrupt::Cancelled);
                 }
             }

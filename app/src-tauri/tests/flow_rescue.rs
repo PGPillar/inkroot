@@ -3,8 +3,11 @@ mod support;
 use inkroot_lib::clock::Clock;
 use inkroot_lib::fakes::{Call, Mode, fake_boot_image};
 use inkroot_lib::image::sha256_file;
-use inkroot_lib::ipc::{ErrorCode, FlowKind, FlowOptions, FlowState, FlowStatus, Slot, StepId};
+use inkroot_lib::ipc::{
+    ErrorCode, FlowKind, FlowOptions, FlowState, FlowStatus, RescueOutcome, Slot, StepId,
+};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use support::*;
 
 fn write_img(dir: &Path, name: &str, bytes: &[u8]) -> (PathBuf, String) {
@@ -218,7 +221,12 @@ fn rescue_waits_then_edl_not_found_prompt() {
     let end = drive(&h, &id, &[]);
     assert_eq!(end.status, FlowStatus::Done, "{end:?}");
     assert_eq!(resets(&h), 1);
-    assert!(!h.world.calls().iter().any(is_adb_call));
+    let calls = h.world.calls();
+    let reset = calls
+        .iter()
+        .position(|c| matches!(c, Call::EdlReset))
+        .unwrap();
+    assert!(!calls[..reset].iter().any(is_adb_call));
 }
 
 #[test]
@@ -290,7 +298,7 @@ fn rescue_refuses_tampered_backup() {
 }
 
 #[test]
-fn rescue_never_calls_adb() {
+fn rescue_makes_no_adb_call_before_the_restart() {
     let h = harness(stock_world());
     let seeded = seed_stock_backup(&h);
     brick(&h);
@@ -304,8 +312,179 @@ fn rescue_never_calls_adb() {
     );
     assert_eq!(end.status, FlowStatus::Done, "{end:?}");
     let calls = h.world.calls();
-    assert!(calls.iter().any(is_edl_call));
-    assert!(!calls.iter().any(is_adb_call), "{calls:#?}");
+    let reset = calls
+        .iter()
+        .position(|c| matches!(c, Call::EdlReset))
+        .expect("reset");
+    assert!(calls[..reset].iter().any(is_edl_call));
+    assert!(!calls[..reset].iter().any(is_adb_call), "{calls:#?}");
+    // Afterwards only looks: never a reboot, push or write over adb.
+    assert!(
+        calls[reset..]
+            .iter()
+            .all(|c| !matches!(c, Call::Reboot { .. } | Call::Push { .. })),
+        "{calls:#?}"
+    );
+}
+
+/// Seeds a stock backup (a real backup flow), then bricks the tablet, applies `faults` and
+/// starts Rescue from that backup.
+fn rescue_bricked(h: &Harness, faults: impl FnOnce(&mut inkroot_lib::fakes::Faults)) -> String {
+    let seeded = seed_stock_backup(h);
+    brick(h);
+    faults(&mut h.world.lock().faults);
+    h.engine
+        .start(FlowKind::Rescue, with_backup_id(&seeded.id))
+        .expect("start rescue")
+}
+
+fn outcome(s: &FlowState) -> Option<RescueOutcome> {
+    s.result.as_ref().and_then(|r| r.rescue_outcome)
+}
+
+fn saw_written_then_wait(h: &Harness, id: &str) {
+    let states: Vec<FlowState> = h
+        .events
+        .states()
+        .into_iter()
+        .filter(|s| s.flow_id == id)
+        .collect();
+    let wait = states
+        .iter()
+        .position(|s| s.step == StepId::WaitBoot)
+        .expect("waitBoot step shown");
+    assert_eq!(states[wait].step_index, 4);
+    assert!(
+        states[..wait].iter().any(|s| s.step == StepId::Reset),
+        "waitBoot only after the restart"
+    );
+    assert!(
+        h.events
+            .logs()
+            .iter()
+            .any(|l| l.line.starts_with("Written and checked")),
+        "written-and-checked line logged"
+    );
+}
+
+#[test]
+fn rescue_tablet_back_authorized_reports_device() {
+    let h = harness(stock_world());
+    let id = rescue_bricked(&h, |_| {});
+    let end = drive(&h, &id, &[]);
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(end.step, StepId::Done);
+    assert_eq!(outcome(&end), Some(RescueOutcome::TabletBack));
+    let dev = end
+        .result
+        .as_ref()
+        .unwrap()
+        .device
+        .as_ref()
+        .expect("device");
+    assert!(!dev.rooted);
+    saw_written_then_wait(&h, &id);
+    // Seen on the first look: the "I can see my home screen" offer never showed.
+    assert!(
+        !h.events
+            .states()
+            .iter()
+            .any(|s| s.flow_id == id && s.prompt.is_some())
+    );
+}
+
+#[test]
+fn rescue_tablet_back_unauthorized() {
+    let h = harness(stock_world());
+    let id = rescue_bricked(&h, |f| f.boots_unauthorized = true);
+    let end = drive(&h, &id, &[]);
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(outcome(&end), Some(RescueOutcome::TabletBack));
+    assert!(end.result.as_ref().unwrap().device.is_none());
+}
+
+#[test]
+fn rescue_tablet_never_seen_is_done_not_failed() {
+    let h = harness(stock_world());
+    let id = rescue_bricked(&h, |f| f.boot_hangs = true);
+    let before = h.clock.now();
+    let end = wait_terminal(&h, &id);
+    // The "I can see my home screen" offer was up while Inkroot watched.
+    let offered = h
+        .events
+        .states()
+        .into_iter()
+        .filter(|s| s.flow_id == id)
+        .find_map(|s| s.prompt)
+        .expect("tabletStarting offered");
+    assert_eq!(prompt_literal(&offered), "tabletStarting");
+    assert_eq!(offered.options.len(), 1);
+    assert_eq!(offered.options[0].id, "homeScreen");
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert!(end.error.is_none());
+    assert!(end.prompt.is_none());
+    assert_eq!(outcome(&end), Some(RescueOutcome::NotSeen));
+    let waited = h.clock.now() - before;
+    assert!(
+        waited >= h.engine.deps().timeouts.wait_rescue_boot,
+        "{waited:?}"
+    );
+    assert!(waited < h.engine.deps().timeouts.wait_rescue_boot + Duration::from_secs(60));
+    saw_written_then_wait(&h, &id);
+    // Quiet: one "not visible" line, not one per poll.
+    let quiet = h
+        .events
+        .logs()
+        .iter()
+        .filter(|l| l.line == "Tablet not visible over USB right now")
+        .count();
+    assert_eq!(quiet, 1);
+}
+
+#[test]
+fn rescue_tablet_back_in_edl_is_reported() {
+    let h = harness(stock_world());
+    let id = rescue_bricked(&h, |f| f.boot_returns_to_edl = true);
+    let end = wait_terminal(&h, &id);
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(outcome(&end), Some(RescueOutcome::BackInEdl));
+    assert_eq!(h.world.lock().mode, Mode::Edl);
+    // Verified write, one restart; never a second write or reset behind the user's back.
+    assert_eq!(resets(&h), 1);
+}
+
+/// Virtual time that also takes a little real time per sleep, so a test can answer a prompt
+/// while the flow is still polling.
+struct SlowClock(inkroot_lib::clock::FakeClock);
+
+impl Clock for SlowClock {
+    fn now(&self) -> Duration {
+        self.0.now()
+    }
+    fn sleep(&self, d: Duration) {
+        std::thread::sleep(Duration::from_millis(5));
+        self.0.sleep(d);
+    }
+    fn wall(&self) -> chrono::DateTime<chrono::Local> {
+        self.0.wall()
+    }
+}
+
+#[test]
+fn rescue_user_ends_wait_early() {
+    let h = harness_opts(stock_world(), true, |d| {
+        d.clock = std::sync::Arc::new(SlowClock(inkroot_lib::clock::FakeClock::new(
+            chrono::Local::now(),
+        )));
+    });
+    let id = rescue_bricked(&h, |f| f.boot_hangs = true);
+    let p = wait_prompt(&h, &id, "tabletStarting");
+    let at = h.engine.deps().clock.now();
+    h.engine.answer(&id, &p.id, "homeScreen");
+    let end = wait_terminal(&h, &id);
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(outcome(&end), Some(RescueOutcome::HomeScreenSeen));
+    assert!(h.engine.deps().clock.now() - at < h.engine.deps().timeouts.wait_rescue_boot);
 }
 
 #[test]

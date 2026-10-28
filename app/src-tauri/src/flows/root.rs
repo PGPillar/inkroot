@@ -75,6 +75,7 @@ pub(crate) fn root_from_step2(
     Ok(FlowResult {
         backup: Some(manifest.to_summary(&id, &dir)),
         magisk_version: Some(profile.magisk.version.clone()),
+        ..FlowResult::default()
     })
 }
 

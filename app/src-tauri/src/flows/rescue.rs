@@ -1,15 +1,27 @@
 //! Rescue (spec §3.3): bring back a tablet that won't start by writing a known-good boot
-//! image over EDL. No adb at all: the tablet is assumed to be unreachable that way.
+//! image over EDL. Before the write the tablet is assumed unreachable over adb, so nothing
+//! touches adb until the verified write has restarted it; then step 4 quietly watches
+//! `adb devices` (and the 9008 device) to tell the user whether it came back.
 
 use super::common::{enter_edl, write_and_verify};
 use super::root::boot_part;
 use super::{FlowCtx, FlowEnd};
+use crate::device::probe;
 use crate::image::{sha256_file, slot_from_filename, validate_boot_image};
-use crate::ipc::{ErrorCode, FlowError, FlowResult, PromptKind, Slot, StepId, SuggestedAction};
+use crate::ipc::{
+    DeviceStatus, ErrorCode, FlowError, FlowResult, PromptKind, RescueOutcome, Slot, StepId,
+    SuggestedAction,
+};
 use crate::profile::DeviceProfile;
+use crate::tools::adb::AdbState;
 use std::path::PathBuf;
+use std::time::Duration;
 
 const STEPS: u8 = 4;
+/// How often step 4 looks for the tablet.
+const BOOT_POLL: Duration = Duration::from_secs(2);
+/// Consecutive sightings of the 9008 device that count as "went back into rescue mode".
+const EDL_SIGHTINGS: u32 = 2;
 
 pub const NO_IMAGE_MESSAGE: &str =
     "Choose a saved copy or a startup file for Inkroot to put back on your tablet.";
@@ -172,9 +184,130 @@ pub fn run_rescue(ctx: &FlowCtx) -> Result<FlowResult, FlowEnd> {
         &picked.scratch,
     )?;
 
+    ctx.info(&format!(
+        "Written and checked: {} on the tablet matches your safety copy",
+        boot_part(&profile, picked.slot)
+    ));
+
+    ctx.step(StepId::WaitBoot, 4, STEPS);
+    let result = wait_for_tablet(ctx);
     ctx.step(StepId::Done, 4, STEPS);
-    ctx.info(
-        "Done. Unplug the deep-flash cable, put the tablet on its normal charger and hold power for about 5 seconds.",
-    );
-    Ok(FlowResult::default())
+    Ok(result)
+}
+
+/// What one look over USB found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Seen {
+    Nothing,
+    Adb(AdbState),
+    Edl,
+}
+
+fn look(ctx: &FlowCtx) -> Seen {
+    let d = ctx.deps();
+    if d.usb.edl_device().is_some() {
+        return Seen::Edl;
+    }
+    let devices = d.adb.devices().unwrap_or_default();
+    let state = |s| devices.iter().any(|x| x.state == s);
+    if state(AdbState::Device) {
+        Seen::Adb(AdbState::Device)
+    } else if state(AdbState::Unauthorized) {
+        Seen::Adb(AdbState::Unauthorized)
+    } else {
+        Seen::Nothing
+    }
+}
+
+fn outcome(o: RescueOutcome) -> FlowResult {
+    FlowResult {
+        rescue_outcome: Some(o),
+        ..FlowResult::default()
+    }
+}
+
+/// Step 4: the copy is written and checked and the tablet was restarted. Watch (quietly, only
+/// changes are logged) for up to `wait_rescue_boot` for it to come back. Never fails: a tablet
+/// with USB debugging off is invisible here, so "not seen" is a normal ending.
+fn wait_for_tablet(ctx: &FlowCtx) -> FlowResult {
+    let d = ctx.deps();
+    let limit = d.timeouts.wait_rescue_boot;
+    ctx.info(&format!(
+        "Waiting up to {} minutes for the tablet to start (Inkroot only sees it if USB debugging is on)",
+        limit.as_secs().div_ceil(60)
+    ));
+    let start = d.clock.now();
+    let mut last: Option<Seen> = None;
+    let mut edl_seen = 0u32;
+    let mut offered = None;
+    loop {
+        let seen = look(ctx);
+        if last != Some(seen) {
+            ctx.info(match seen {
+                Seen::Nothing => "Tablet not visible over USB right now",
+                Seen::Adb(AdbState::Device) => "Tablet seen: device",
+                Seen::Adb(AdbState::Unauthorized) => "Tablet seen: unauthorized",
+                Seen::Adb(AdbState::Offline) => "Tablet seen: offline",
+                Seen::Edl => "Tablet seen in rescue (EDL) mode",
+            });
+            last = Some(seen);
+        }
+        match seen {
+            Seen::Adb(AdbState::Device) => {
+                let device = match probe(d.adb.as_ref(), d.usb.as_ref(), &d.profiles, &d.timeouts).0
+                {
+                    DeviceStatus::Adb { info, .. } => {
+                        ctx.info(&format!(
+                            "The tablet has started ({})",
+                            if info.rooted { "rooted" } else { "not rooted" }
+                        ));
+                        Some(info)
+                    }
+                    _ => {
+                        ctx.info("The tablet has started");
+                        None
+                    }
+                };
+                return FlowResult {
+                    device,
+                    ..outcome(RescueOutcome::TabletBack)
+                };
+            }
+            Seen::Adb(_) => {
+                ctx.info(
+                    "The tablet has started (it hasn't allowed USB debugging from this computer)",
+                );
+                return outcome(RescueOutcome::TabletBack);
+            }
+            Seen::Edl => {
+                edl_seen += 1;
+                if edl_seen >= EDL_SIGHTINGS {
+                    ctx.info("The tablet went back into rescue (EDL) mode instead of starting");
+                    return outcome(RescueOutcome::BackInEdl);
+                }
+            }
+            Seen::Nothing => edl_seen = 0,
+        }
+        // Offered after the first look, so a tablet that's already back never shows it.
+        let prompt = offered.get_or_insert_with(|| ctx.offer(PromptKind::TabletStarting));
+        match ctx.poll_answer(prompt) {
+            Ok(None) => {}
+            Ok(Some(_)) => {
+                ctx.info("You can see the home screen: done");
+                return outcome(RescueOutcome::HomeScreenSeen);
+            }
+            // The write is verified: stopping the wait is not a failed or cancelled rescue.
+            Err(_) => {
+                ctx.info("Stopped watching for the tablet");
+                return outcome(RescueOutcome::NotSeen);
+            }
+        }
+        if d.clock.now().saturating_sub(start) >= limit {
+            ctx.info(
+                "Didn't see the tablet over USB; it may still be starting, or USB debugging is off",
+            );
+            return outcome(RescueOutcome::NotSeen);
+        }
+        d.clock.sleep(BOOT_POLL);
+    }
 }

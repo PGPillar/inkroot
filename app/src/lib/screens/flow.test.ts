@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { renderWithApp } from '../../test/render';
 import Shell from '../Shell.svelte';
-import type { DeviceStatus, FlowState } from '../ipc';
+import type { DeviceInfo, DeviceStatus, FlowState } from '../ipc';
 import { createMockBackend, createMockPlatform } from '../mock/engine';
 import { NEW_BACKUP, STOCK_BACKUP } from '../mock/fixtures';
 import { SCENARIOS } from '../mock/scenarios';
@@ -350,19 +350,70 @@ describe('flow screen', () => {
     await until(hasHeading('Saved for rescue only.'), 'import done');
   });
 
-  test('rescue done waits for the tablet to come back', async () => {
-    const x = await setup('ready');
-    x.emit.state!({
-      flowId: 'mock-r', kind: 'rescue', step: 'done', stepIndex: 4, stepCount: 4, status: 'done',
-      prompt: null, error: null, result: {}, writing: false,
-    });
-    x.emit.device!({ kind: 'none' });
-    await vi.advanceTimersByTimeAsync(1);
-    expect(heading('Unplug the cable and start your tablet.')).toBeVisible();
-    expect(screen.getByText('waiting for it to start…')).toBeVisible();
+  test('rescue waits with a checklist, then shows the tablet is back (rooted line)', async () => {
+    const x = await setup('rescue-back');
+    await x.app.startJob('rescue', { backupId: STOCK_BACKUP.id });
+    await until(hasHeading('Written and checked ✓'), 'waiting screen');
+    expect(screen.getByText('STEP 4 OF 4 · STARTING UP')).toBeVisible();
+    expect(screen.getByText('✓ Written to your tablet')).toBeVisible();
+    expect(screen.getByText('✓ Checked — it matches your safety copy')).toBeVisible();
+    expect(screen.getByText('… Waiting for your tablet to start (up to 5 min)')).toBeVisible();
+    // Not offered yet: the button waits for the backend's offer.
+    expect(button('Done — I can see my home screen')).toBeDisabled();
+    await until(hasHeading('Your tablet is back ✓'), 'tablet back');
+    expect(screen.getByText('We wrote your safety copy, checked it, and your tablet has started up again.')).toBeVisible();
+    expect(screen.getByText("It's not rooted.")).toBeVisible();
+    await click('Finish');
+    expect(x.app.flow).toBeNull();
+  });
+
+  test('rescue: "I can see my home screen" ends the wait gracefully', async () => {
+    const x = await setup('rescue-home-screen');
+    await x.app.startJob('rescue', { backupId: STOCK_BACKUP.id });
+    await until(() => !!screen.queryByRole('button', { name: 'Done — I can see my home screen' })?.matches(':enabled'), 'offer');
+    const answer = vi.spyOn(x.backend, 'answerPrompt');
+    await click('Done — I can see my home screen');
+    expect(answer).toHaveBeenCalledWith(x.app.flow!.flowId, expect.any(String), 'homeScreen');
+    await until(hasHeading('Your tablet is back ✓'), 'done');
+    expect(screen.getByText("We wrote your safety copy, checked it, and you've seen your tablet start up again.")).toBeVisible();
+    expect(screen.queryByText(/It's (not )?rooted/)).toBeNull();
+    expect(x.app.flow!.status).toBe('done');
+  });
+
+  test('rescue: tablet not seen is a calm done, not a failure', async () => {
+    const x = await setup('rescue-not-seen');
+    await x.app.startJob('rescue', { backupId: STOCK_BACKUP.id });
+    await until(() => x.app.flow?.status === 'done', 'done');
+    expect(heading('Written and checked ✓')).toBeVisible();
+    expect(screen.getByText(/Once you see its home screen, you're done\./)).toBeVisible();
+    expect(screen.getByText(/can't see your tablet when USB debugging is off/)).toBeVisible();
+    expect(screen.queryByText("It's back ✓ Your tablet started.")).toBeNull();
+    // The device poller spots it later: say so.
     x.emit.device!(SCENARIOS.ready.device);
     await vi.advanceTimersByTimeAsync(1);
     expect(screen.getByText("It's back ✓ Your tablet started.")).toBeVisible();
+  });
+
+  test('rescue: tablet back in rescue mode gives guidance and a way to run Rescue again', async () => {
+    const x = await setup('rescue-back-in-edl');
+    await x.app.startJob('rescue', { backupId: STOCK_BACKUP.id });
+    await until(hasHeading('Your tablet went back to rescue mode'), 'back in edl');
+    expect(screen.getByText(/Hold the power button for 10 seconds/)).toBeVisible();
+    await click('Run Rescue again');
+    expect(x.app.flow).toBeNull();
+    expect(x.app.route.screen).toBe('rescuePick');
+  });
+
+  test('rescue done from a frozen rooted result says it is rooted', async () => {
+    const x = await setup('ready');
+    x.emit.state!({
+      flowId: 'mock-r', kind: 'rescue', step: 'done', stepIndex: 4, stepCount: 4, status: 'done',
+      prompt: null, error: null, writing: false,
+      result: { rescueOutcome: 'tabletBack', device: { ...(SCENARIOS.ready.device as { info: DeviceInfo }).info, rooted: true } },
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(heading('Your tablet is back ✓')).toBeVisible();
+    expect(screen.getByText("It's rooted.")).toBeVisible();
   });
 
   test('unknown step falls back without crashing', async () => {

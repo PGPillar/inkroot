@@ -27,6 +27,7 @@ export const ALL_PROMPT_KINDS: PromptKind[] = [
   'edlNotFound',
   'retryWrite',
   'stillInEdl',
+  'tabletStarting',
 ];
 
 export const FLOW_STEP_COUNT: Record<FlowKind, number> = {
@@ -43,7 +44,7 @@ export const FLOW_STEPS: Record<FlowKind, StepId[]> = {
   backup: ['checkDevice', 'enterEdl', 'readPartitions', 'verifyBackup', 'rebootToSystem'],
   importBackup: ['pickImage', 'stockCheck', 'chooseSlot', 'saveImport'],
   root: ['checkDevice', 'enterEdl', 'readPartitions', 'verifyBackup', 'rebootToSystem', 'patch', 'cableCheck', 'write', 'verifyWrite', 'reset', 'waitBoot', 'verifyRoot'],
-  rescue: ['pickImage', 'chooseSlot', 'cableGuide', 'waitEdl', 'write', 'verifyWrite', 'reset'],
+  rescue: ['pickImage', 'chooseSlot', 'cableGuide', 'waitEdl', 'write', 'verifyWrite', 'reset', 'waitBoot'],
   unroot: ['checkDevice', 'enterEdl', 'write', 'verifyWrite', 'reset', 'waitBoot'],
   reinstallBootService: ['checkDevice', 'pushScripts', 'waitBoot', 'verifyRoot'],
 };

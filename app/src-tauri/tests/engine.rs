@@ -126,6 +126,10 @@ fn prompt_options_match_contract() {
         ids(PromptKind::StillInEdl),
         s(&[("retry", Primary), ("heldPower", Secondary)])
     );
+    assert_eq!(
+        ids(PromptKind::TabletStarting),
+        s(&[("homeScreen", Primary)])
+    );
     let labels: Vec<String> = prompt_options(PromptKind::CableCheck)
         .into_iter()
         .map(|o| o.label)

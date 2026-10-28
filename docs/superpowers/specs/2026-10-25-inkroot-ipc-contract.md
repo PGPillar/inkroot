@@ -77,7 +77,9 @@ interface Prompt {
     | "installUdev"         // Linux:   options: install | cancel
     | "edlNotFound"         // options: retry | cancel   (after 60 s waiting for 9008)
     | "retryWrite"          // hash mismatch: options: retry | cancel
-    | "stillInEdl";         // edl reset tried 3x, 9008 still present: options: retry | heldPower
+    | "stillInEdl"          // edl reset tried 3x, 9008 still present: options: retry | heldPower
+    | "tabletStarting";     // rescue step 4 only: options: homeScreen. Non-blocking: the backend keeps
+                            // polling while it is shown; answering ends the wait (rescueOutcome "homeScreenSeen")
   options: PromptOption[];
 }
 
@@ -94,9 +96,17 @@ interface FlowError {
   suggestedAction: "retry" | "goToRescue" | "reconnect" | "chargeDevice" | "importBackup" | null;
 }
 
+type RescueOutcome =
+  | "tabletBack"            // seen over adb after the restart (authorized or unauthorized)
+  | "notSeen"               // not seen within ~5 min (often USB debugging is off); still a success
+  | "homeScreenSeen"        // the user answered tabletStarting before Inkroot saw the tablet
+  | "backInEdl";            // the 9008 device came back instead of a started tablet
+
 interface FlowResult {
   backup?: BackupSummary;   // backup/importBackup/root (root updates the backup with patched-boot.img)
   magiskVersion?: string;   // root
+  rescueOutcome?: RescueOutcome; // rescue (always set when it ends done)
+  device?: DeviceInfo;      // rescue + tabletBack, when the tablet allowed USB debugging (e.g. rooted)
 }
 
 interface FlowState {
@@ -146,7 +156,7 @@ interface AppInfo { version: string; demo: boolean; os: "macos" | "windows" | "l
 - **backup** (4): checkDevice → enterEdl → readPartitions → verifyBackup (+ rebootToSystem folded into verifyBackup's tail) → done
 - **importBackup** (3): pickImage → stockCheck → chooseSlot/saveImport → done
 - **root** (4 visible groups): 1 checkDevice · 2 "Safety copy" (runs the backup sub-flow if no verified stock backup; else instant ✓) · 3 patch → cableCheck → enterEdl → write → verifyWrite → reset · 4 waitBoot → verifyRoot → done
-- **rescue** (4): pickImage/chooseSlot → cableGuide → waitEdl → write → verifyWrite → reset → done
+- **rescue** (4): 1 pickImage/chooseSlot · 2 cableGuide → waitEdl · 3 write → verifyWrite → reset · 4 waitBoot → done. No adb call before the verified write's reset. In waitBoot ("written and checked") the backend quietly polls `adb devices` and the 9008 device every 2 s for up to 5 min and shows the non-blocking `tabletStarting` prompt; it never fails here (a cancel also ends as `notSeen`). The result carries `rescueOutcome` (+ `device` for an authorized `tabletBack`).
 - **unroot** (3): checkDevice → enterEdl → write → verifyWrite → reset → waitBoot (confirms `rooted:false`) → done
 - **reinstallBootService** (2): checkDevice → pushScripts (hook present) → waitBoot → verifyRoot → done. If the hook is absent, the same flowId changes `kind` to `"root"` and continues from root step 2 using the stock backup (the UI just keeps rendering FlowState). If no stock backup exists it fails with `noStockBackup` / `suggestedAction:"importBackup"`.
 

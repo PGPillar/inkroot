@@ -15,6 +15,7 @@
   import CableGuide from './CableGuide.svelte';
   import DoneView from './DoneView.svelte';
   import FailureView from './FailureView.svelte';
+  import RescueWait from './RescueWait.svelte';
 
   type Art = { tablet: 'blank' | 'logo' | 'content' } | { press: true } | { checks: true } | { icon: 'backup' } | null;
 
@@ -79,6 +80,8 @@
       <Button onclick={() => app.dismissFlow()}>{CANCELLED_COPY.back}</Button>
     {/snippet}
   </StepFrame>
+{:else if flow.kind === 'rescue' && flow.step === 'waitBoot'}
+  <RescueWait {flow} />
 {:else if flow.prompt}
   <PromptView
     prompt={flow.prompt}

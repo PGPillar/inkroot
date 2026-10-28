@@ -1,4 +1,4 @@
-import type { DeviceStatus, FlowResult, FlowState, Settings } from '../ipc';
+import type { DeviceStatus, FlowResult, FlowState, Prompt, RescueOutcome, Settings } from '../ipc';
 import type { Beat, Scenario } from './engine';
 import {
   cableCheckPrompt, checkDevice, edlNotFoundPrompt, enterEdl, patch, readPartitions, rebootToSystem,
@@ -9,7 +9,7 @@ import {
   STOCK_BACKUP, adb, withPatched,
 } from './fixtures';
 
-const log = (line: string): Beat => ({ log: line });
+const log = (line: string, stream?: 'stdout' | 'stderr' | 'info'): Beat => ({ log: line, stream });
 const PLAIN = adb(NOTE_MAX);
 const ROOTED = adb(NOTE_MAX_ROOTED);
 const EDL: DeviceStatus = { kind: 'edl' };
@@ -47,20 +47,49 @@ const importFlow = (result: FlowResult): Beat[] => [
   { done: result },
 ];
 
-/** Rescue: pick, cable guide, wait for the tablet in rescue mode, write, reset. */
-const rescueFlow = (o: { prefix?: Beat[]; waitEdl?: Beat[] } = {}): Beat[] => [
+const TABLET_STARTING: Omit<Prompt, 'id'> = {
+  kind: 'tabletStarting',
+  options: [{ id: 'homeScreen', label: 'Done — I can see my home screen', emphasis: 'primary' }],
+};
+
+/** Rescue step 4: written and checked; watch for the tablet, ending the way `outcome` says. */
+const rescueWait = (outcome: RescueOutcome): Beat[] => {
+  const watch: Beat[] = [
+    step('waitBoot', 4),
+    log('Written and checked: boot_b on the tablet matches your safety copy', 'info'),
+    log('Waiting up to 5 minutes for the tablet to start (Inkroot only sees it if USB debugging is on)', 'info'),
+    log('Tablet not visible over USB right now', 'info'),
+  ];
+  const end = (result: FlowResult, ...beats: Beat[]): Beat[] => [...beats, { done: result }];
+  switch (outcome) {
+    case 'tabletBack':
+      return [...watch, { wait: 2500 }, { device: PLAIN }, log('Tablet seen: device', 'info'),
+        ...end({ rescueOutcome: 'tabletBack', device: NOTE_MAX })];
+    case 'backInEdl':
+      return [...watch, { wait: 2500 }, { device: EDL }, log('Tablet seen in rescue (EDL) mode', 'info'),
+        ...end({ rescueOutcome: 'backInEdl' })];
+    case 'notSeen':
+      return [...watch, { wait: 4000 }, log("Didn't see the tablet over USB; it may still be starting, or USB debugging is off", 'info'),
+        ...end({ rescueOutcome: 'notSeen' })];
+    case 'homeScreenSeen':
+      // Waits on the user: the mock never sees the tablet.
+      return [...watch, { prompt: TABLET_STARTING, branches: { homeScreen: end({ rescueOutcome: 'homeScreenSeen' }, log('You chose: homeScreen', 'info')) } }];
+  }
+};
+
+/** Rescue: pick, cable guide, wait for the tablet in rescue mode, write, reset, watch it start. */
+const rescueFlow = (o: { prefix?: Beat[]; waitEdl?: Beat[]; outcome?: RescueOutcome } = {}): Beat[] => [
   step('pickImage', 1),
   ...(o.prefix ?? []),
   log('Using boot_b.img from the selected backup'),
   { wait: 500 },
   step('cableGuide', 2),
   { wait: 2500 },
-  step('waitEdl', 3),
+  step('waitEdl', 2),
   log('Waiting for Qualcomm HS-USB QDLoader 9008'),
   ...(o.waitEdl ?? [{ wait: 1500 }, { device: EDL }, log('Found Qualcomm HS-USB QDLoader 9008 (05c6:9008)')]),
-  ...writeBoot(4, 'b', 'boot_b.img'), ...verifyWrite(4), ...reset(4),
-  { wait: 1500 }, { device: PLAIN }, log('Tablet is back'),
-  { done: {} },
+  ...writeBoot(3, 'b', 'boot_b.img'), ...verifyWrite(3), ...reset(3),
+  ...rescueWait(o.outcome ?? 'tabletBack'),
 ];
 
 const driverPrompt = (kind: 'installDriver' | 'installUdev', what: string): Beat[] => [
@@ -300,6 +329,19 @@ const list: Scenario[] = [
       ],
     },
   }),
+  // Rescue endings (step 4 watches for the tablet; FlowResult.rescueOutcome).
+  make('rescue-back', 'Rescue: the tablet starts and shows up over USB debugging.', EDL, {
+    flows: { ...happyFlows(true), rescue: rescueFlow({ outcome: 'tabletBack' }) },
+  }),
+  make('rescue-not-seen', "Rescue: written and checked, but the tablet never shows up (USB debugging off).", EDL, {
+    flows: { ...happyFlows(true), rescue: rescueFlow({ outcome: 'notSeen' }) },
+  }),
+  make('rescue-home-screen', 'Rescue: the user ends the wait with "I can see my home screen".', EDL, {
+    flows: { ...happyFlows(true), rescue: rescueFlow({ outcome: 'homeScreenSeen' }) },
+  }),
+  make('rescue-back-in-edl', 'Rescue: the tablet drops back into rescue mode instead of starting.', EDL, {
+    flows: { ...happyFlows(true), rescue: rescueFlow({ outcome: 'backInEdl' }) },
+  }),
   make('windows-driver', 'Windows: rescue needs the USB driver first.', EDL, {
     appInfo: { os: 'windows', backupRoot: 'C:\\Users\\you\\Documents\\Inkroot' },
     flows: { ...happyFlows(true), rescue: rescueFlow({ prefix: driverPrompt('installDriver', 'the USB driver') }) },
@@ -351,6 +393,30 @@ const list: Scenario[] = [
   }),
   make('shot-rescue-cable', 'Screenshot: rescue, cable guide.', NONE, {
     frozen: { flow: frozenFlow({ kind: 'rescue', step: 'cableGuide', stepIndex: 2 }) },
+  }),
+  make('shot-rescue-waiting', 'Layout: rescue, written and checked, waiting for the tablet, with a long log.', NONE, {
+    frozen: {
+      flow: frozenFlow({ kind: 'rescue', step: 'waitBoot', stepIndex: 4, status: 'waitingForUser', prompt: { id: 'shot-p', ...TABLET_STARTING } }),
+      logs: LONG_LOG,
+    },
+  }),
+  make('shot-rescue-back', 'Layout: rescue done, the tablet is back (not rooted), with a long log.', PLAIN, {
+    frozen: {
+      flow: frozenFlow({ kind: 'rescue', step: 'done', stepIndex: 4, status: 'done', result: { rescueOutcome: 'tabletBack', device: NOTE_MAX } }),
+      logs: LONG_LOG,
+    },
+  }),
+  make('shot-rescue-not-seen', 'Layout: rescue done, the tablet was not seen, with a long log.', NONE, {
+    frozen: {
+      flow: frozenFlow({ kind: 'rescue', step: 'done', stepIndex: 4, status: 'done', result: { rescueOutcome: 'notSeen' } }),
+      logs: LONG_LOG,
+    },
+  }),
+  make('shot-rescue-back-in-edl', 'Layout: rescue done, the tablet went back into rescue mode, with a long log.', EDL, {
+    frozen: {
+      flow: frozenFlow({ kind: 'rescue', step: 'done', stepIndex: 4, status: 'done', result: { rescueOutcome: 'backInEdl' } }),
+      logs: LONG_LOG,
+    },
   }),
   make('shot-root-done', 'Screenshot: root finished.', ROOTED, {
     frozen: {

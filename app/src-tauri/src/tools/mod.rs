@@ -68,6 +68,8 @@ pub struct Timeouts {
     pub wait_edl: Duration,
     pub wait_boot: Duration,
     pub wait_bootsvc: Duration,
+    /// Rescue: how long to watch for the tablet to start after the restart.
+    pub wait_rescue_boot: Duration,
     pub poll: Duration,
 }
 
@@ -83,6 +85,7 @@ impl Default for Timeouts {
             wait_edl: Duration::from_secs(60),
             wait_boot: Duration::from_secs(180),
             wait_bootsvc: Duration::from_secs(90),
+            wait_rescue_boot: Duration::from_secs(300),
             poll: Duration::from_millis(1500),
         }
     }

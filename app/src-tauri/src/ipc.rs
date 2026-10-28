@@ -186,6 +186,9 @@ pub enum PromptKind {
     RetryWrite,
     /// `edl reset` didn't get the tablet out of EDL: options `retry` | `heldPower`.
     StillInEdl,
+    /// Rescue: written, checked and restarted; Inkroot is watching for the tablet to start.
+    /// Shown while the flow keeps polling (it doesn't block it): option `homeScreen`.
+    TabletStarting,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -247,6 +250,20 @@ impl std::fmt::Display for FlowError {
 
 impl std::error::Error for FlowError {}
 
+/// How a rescue ended once its write was verified and the tablet restarted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RescueOutcome {
+    /// The tablet showed up over USB debugging (authorized or not).
+    TabletBack,
+    /// It didn't show up within the wait (often USB debugging is off after a rescue).
+    NotSeen,
+    /// The user said they can see the home screen before Inkroot saw the tablet.
+    HomeScreenSeen,
+    /// It went back into rescue (EDL) mode instead of starting.
+    BackInEdl,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowResult {
@@ -254,6 +271,11 @@ pub struct FlowResult {
     pub backup: Option<BackupSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub magisk_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rescue_outcome: Option<RescueOutcome>,
+    /// rescue + `tabletBack`: the tablet as it came back, when it allowed USB debugging.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device: Option<DeviceInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

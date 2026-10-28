@@ -30,7 +30,7 @@ export const GROUP_LABELS: Record<FlowKind, string[]> = {
   backup: ['Check', 'Get ready', 'Copy', 'Verify'],
   importBackup: ['Open', 'Check', 'Save'],
   root: ['Check', 'Safety copy', 'Rooting', 'Restart'],
-  rescue: ['Your file', 'Cable', 'Connect', 'Writing'],
+  rescue: ['Your file', 'Cable', 'Writing', 'Starting up'],
   unroot: ['Check', 'Restoring', 'Restart'],
   reinstallBootService: ['Check', 'Reinstall'],
 };
@@ -151,6 +151,11 @@ export const STEP_COPY: Record<FlowKind, Partial<Record<StepId, StepCopy>>> = {
     write: WRITE,
     verifyWrite: VERIFY_WRITE,
     reset: RESET,
+    waitBoot: {
+      heading: 'Written and checked ✓',
+      body: 'Your tablet is starting up. This can take a few minutes.',
+      tech: 'watching adb devices quietly (up to 5 min); 9008 again = back in rescue mode',
+    },
   },
   unroot: {
     checkDevice: CHECK,
@@ -213,8 +218,8 @@ export const DONE_COPY: Record<FlowKind, StepCopy & { checks?: string[] }> = {
     checks: ['Magisk daemon alive', 'Boot service running as root', 'Backup kept safe'],
   },
   rescue: {
-    heading: 'Unplug the cable and start your tablet.',
-    body: 'Unplug the deep-flash cable, put your tablet on its normal charger, and hold the power button for about 5 seconds.',
+    heading: 'Written and checked ✓',
+    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
   },
   unroot: {
     heading: 'Your Note Max is back to stock.',
@@ -253,7 +258,40 @@ export const SAFETY_CHECKS = {
   saved: 'Startup software saved',
   checked: 'Copy checked',
 } as const;
-export const RESCUE_BACK = { waiting: 'waiting for it to start…', found: "It's back ✓ Your tablet started." } as const;
+/** Rescue done, not seen during the wait, then spotted by the device poller. */
+export const RESCUE_BACK = { found: "It's back ✓ Your tablet started." } as const;
+/** Rescue step 4: the copy is written and checked; Inkroot watches for the tablet to start. */
+export const RESCUE_WAIT = {
+  checklist: [
+    '✓ Written to your tablet',
+    '✓ Checked — it matches your safety copy',
+    '… Waiting for your tablet to start (up to 5 min)',
+  ],
+  done: 'Done — I can see my home screen',
+} as const;
+/** How a rescue ended (FlowResult.rescueOutcome). */
+export const RESCUE_DONE = {
+  tabletBack: {
+    heading: 'Your tablet is back ✓',
+    body: 'We wrote your safety copy, checked it, and your tablet has started up again.',
+  },
+  homeScreenSeen: {
+    heading: 'Your tablet is back ✓',
+    body: "We wrote your safety copy, checked it, and you've seen your tablet start up again.",
+  },
+  notSeen: {
+    heading: 'Written and checked ✓',
+    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
+    note: "Inkroot can't see your tablet when USB debugging is off, which is common after a rescue. That's okay.",
+  },
+  backInEdl: {
+    heading: 'Your tablet went back to rescue mode',
+    body: "We wrote your safety copy and checked it, but your tablet restarted into rescue mode instead of starting up. Hold the power button for 10 seconds to restart it. If it lands in rescue mode again, run Rescue again with a different saved copy.",
+  },
+  rooted: "It's rooted.",
+  notRooted: "It's not rooted.",
+  again: 'Run Rescue again',
+} as const;
 
 export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
   cableCheck: {
@@ -321,6 +359,13 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
       'Or choose “Try restarting again” to let Inkroot have another go.',
     ],
     options: { retry: 'Try restarting again', heldPower: "I've restarted it" },
+  },
+  // Rendered by the rescue waiting screen (RescueWait), not PromptView.
+  tabletStarting: {
+    label: 'Starting up',
+    heading: 'Written and checked ✓',
+    body: 'Your tablet is starting up. This can take a few minutes.',
+    options: { homeScreen: 'Done — I can see my home screen' },
   },
 };
 /** edlNotFound for every flow except rescue. */

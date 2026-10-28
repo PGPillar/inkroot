@@ -41,6 +41,10 @@ pub struct Faults {
     /// The fake patch writes `patched-boot.img` WITHOUT the marker, so the tablet boots unrooted.
     pub patch_drops_marker: bool,
     pub boot_hangs: bool,
+    /// The tablet starts but hasn't allowed USB debugging from this computer.
+    pub boots_unauthorized: bool,
+    /// Instead of starting, the tablet drops straight back into EDL after a reset.
+    pub boot_returns_to_edl: bool,
     pub stock_check_exit: Option<i32>,
     pub hook_check_exit: Option<i32>,
     /// Every read of a partition after the first (counted over the world's lifetime, across
@@ -156,7 +160,9 @@ impl World {
             .partitions
             .get(&format!("boot{suffix}"))
             .is_some_and(|b| has_marker(b));
-        self.mode = Mode::System { authorized: true };
+        self.mode = Mode::System {
+            authorized: !self.faults.boots_unauthorized,
+        };
         self.rooted = rooted;
         if rooted {
             self.magisk_version = Some("30.7".into());
@@ -296,7 +302,10 @@ impl Adb for FakeAdb {
     fn devices(&self) -> Result<Vec<AdbDevice>, ToolError> {
         let mut w = self.world.lock();
         w.calls.push(Call::Devices);
-        if w.pending_boot && w.mode == Mode::Off && !w.faults.boot_hangs {
+        if w.pending_boot && w.mode == Mode::Off && w.faults.boot_returns_to_edl {
+            w.pending_boot = false;
+            w.mode = Mode::Edl;
+        } else if w.pending_boot && w.mode == Mode::Off && !w.faults.boot_hangs {
             w.boot();
         }
         let mut v = Vec::new();

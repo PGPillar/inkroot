@@ -22,6 +22,10 @@ const cases = [
   ['shot-root-reset', 'Restarting your tablet'],
   ['shot-root-boot-timeout', "Your tablet hasn't restarted yet"],
   ['shot-root-still-in-edl', 'Your tablet is still in rescue mode'],
+  ['shot-rescue-waiting', 'Written and checked ✓'],
+  ['shot-rescue-back', 'Your tablet is back ✓'],
+  ['shot-rescue-not-seen', 'Written and checked ✓'],
+  ['shot-rescue-back-in-edl', 'Your tablet went back to rescue mode'],
 ] as const;
 
 for (const [scenario, heading] of cases) {

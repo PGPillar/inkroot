@@ -8,7 +8,7 @@
   import StepFrame from '../components/StepFrame.svelte';
   import { getApp } from '../context';
   import {
-    COMMON, DONE_COPY, DONE_IMPORT_RESCUE_ONLY, RESCUE_BACK, ROOT_MORE, ROOT_TIP, STEP_DONE_LABEL, fill,
+    COMMON, DONE_COPY, DONE_IMPORT_RESCUE_ONLY, RESCUE_BACK, RESCUE_DONE, ROOT_MORE, ROOT_TIP, STEP_DONE_LABEL, fill,
   } from '../copy';
   import { revealLabel } from '../format';
   import type { FlowState } from '../ipc';
@@ -19,7 +19,13 @@
   const app = getApp();
   const backup = $derived(flow.result?.backup);
   const rescueOnly = $derived(flow.kind === 'importBackup' && backup?.stock === false);
-  const copy = $derived(rescueOnly ? DONE_IMPORT_RESCUE_ONLY : DONE_COPY[flow.kind]);
+  // Rescue says how it ended; an older backend without an outcome reads as "not seen".
+  const outcome = $derived(flow.kind === 'rescue' ? (flow.result?.rescueOutcome ?? 'notSeen') : null);
+  const copy = $derived(
+    outcome ? RESCUE_DONE[outcome] : rescueOnly ? DONE_IMPORT_RESCUE_ONLY : DONE_COPY[flow.kind],
+  );
+  const started = $derived(outcome === 'tabletBack' || outcome === 'homeScreenSeen');
+  const rooted = $derived(outcome === 'tabletBack' ? flow.result?.device?.rooted : undefined);
   const body = $derived(
     fill(copy.body, {
       path: backup?.path ?? app.info?.backupRoot ?? '',
@@ -27,13 +33,16 @@
     }),
   );
   const checks = $derived((rescueOnly ? [] : (DONE_COPY[flow.kind].checks ?? [])).map((label) => ({ label, done: true })));
+  // Not seen during the wait, but the device poller may still spot it once USB debugging allows.
   const back = $derived(app.device.kind === 'adb');
 </script>
 
 <StepFrame label={STEP_DONE_LABEL} heading={copy.heading} {body}>
   {#snippet art()}
-    {#if flow.kind === 'rescue'}
-      <Tablet screen={back ? 'content' : 'blank'} highlight={back ? undefined : 'power'} width={120} title={copy.heading} />
+    {#if outcome === 'backInEdl'}
+      <Tablet screen="blank" highlight="power" width={120} title={copy.heading} />
+    {:else if outcome}
+      <Tablet screen={started || back ? 'content' : 'logo'} width={120} title={copy.heading} />
     {:else if flow.kind === 'root'}
       <div class="split">
         <Checklist items={checks} />
@@ -52,8 +61,11 @@
     {/if}
   {/snippet}
 
-  {#if flow.kind === 'rescue'}
-    <LiveStatus state={back ? 'found' : 'waiting'} text={back ? RESCUE_BACK.found : RESCUE_BACK.waiting} />
+  {#if rooted !== undefined}
+    <p class="note">{rooted ? RESCUE_DONE.rooted : RESCUE_DONE.notRooted}</p>
+  {:else if outcome === 'notSeen'}
+    <p class="note">{RESCUE_DONE.notSeen.note}</p>
+    {#if back}<LiveStatus state="found" text={RESCUE_BACK.found} />{/if}
   {:else if flow.kind === 'root'}
     <LinkNote failed={app.openFailed} urls={[BOOT_SERVICE_DOCS_URL]} />
   {/if}
@@ -61,6 +73,8 @@
   {#snippet actions()}
     {#if flow.kind === 'root'}
       <button type="button" class="textlink" onclick={() => void app.openExternal(BOOT_SERVICE_DOCS_URL)}>{ROOT_MORE}</button>
+    {:else if outcome === 'backInEdl'}
+      <Button variant="secondary" onclick={() => app.goToRescue()}>{RESCUE_DONE.again}</Button>
     {:else if flow.kind === 'backup' && backup && app.info}
       <Button variant="secondary" onclick={() => void app.reveal(backup.path)}>{revealLabel(app.info.os)}</Button>
     {/if}
@@ -90,6 +104,11 @@
   h2 {
     margin: 0 0 var(--space-1);
     font: 600 17px/1.3 var(--font-sans);
+  }
+  .note {
+    margin: 0;
+    max-width: 52ch;
+    font: var(--fs-body);
   }
   .tip p {
     margin: 0;
