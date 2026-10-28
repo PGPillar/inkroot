@@ -36,6 +36,8 @@
   const last = $derived(panel === CABLE_GUIDE.length - 1);
   const label = $derived(fill(CABLE_GUIDE_LABEL, { i: app.flow?.stepIndex ?? 2, p: panel + 1 }));
   const found = $derived(app.edlFound);
+  /** Inkroot's 60 s wait for the tablet starts when the last panel's button answers this. */
+  const guidePrompt = $derived(app.flow?.prompt?.kind === 'cableGuide' ? app.flow.prompt : null);
 
   // The hold timer counts down in whole seconds, in text only. It belongs to the panel it started on.
   let timer = $state<{ panel: number; left: number } | null>(null);
@@ -110,6 +112,8 @@
         {/if}
         {#if !last}
           <Button onclick={() => go(panel + 1)}>{step.primary ?? step.next}</Button>
+        {:else if guidePrompt}
+          <Button disabled={app.inFlight} onclick={() => void app.answer('done')}>{CABLE_GUIDE_NAV.done}</Button>
         {/if}
       {/snippet}
     </StepFrame>

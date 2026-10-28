@@ -315,26 +315,58 @@ describe('flow screen', () => {
     expect(screen.getByText('Step 3 of 4 · Cable · 3 of 6')).toBeVisible();
   });
 
-  test('rescue edl not found shows troubleshooting', async () => {
-    await setup('rescue-edl-not-found', 1);
+  /** Starts rescue-edl-not-found and walks the guide to its last panel. */
+  async function toLastCablePanel() {
+    const x = await setup('rescue-edl-not-found', 1);
     await click('Tablet stuck on the ONYX logo? Rescue it →');
     await fireEvent.click(screen.getAllByRole('radio')[0]);
     await click('Continue');
     await until(hasHeading('You need a deep-flash cable'), 'cable guide');
     await click('I have one');
-    for (let i = 0; i < 3; i++) await click('Next');
-    expect(heading('Hold the power button for 15 seconds')).toBeVisible();
+    for (let i = 0; i < 4; i++) await click('Next');
+    expect(heading('Keep holding the cable button 10 more seconds')).toBeVisible();
+    return x;
+  }
+
+  test('rescue: the wait for the tablet only starts once the cable guide is done', async () => {
+    const x = await toLastCablePanel();
+    // However long the guide stays up, the tips don't take over.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(heading('Keep holding the cable button 10 more seconds')).toBeVisible();
+    const answer = vi.spyOn(x.backend, 'answerPrompt');
+    await click("I've done these steps");
+    expect(answer).toHaveBeenCalledWith(x.app.flow!.flowId, expect.any(String), 'done');
+    await vi.advanceTimersByTimeAsync(1);
+    // The same panel stays up, waiting, without its button.
+    expect(heading('Keep holding the cable button 10 more seconds')).toBeVisible();
+    expect(screen.queryByRole('button', { name: "I've done these steps" })).toBeNull();
+    expect(screen.getByText('Waiting for your tablet…')).toBeVisible();
+  });
+
+  test('rescue: the tips never block; the rescue goes on by itself when the tablet shows up', async () => {
+    const x = await toLastCablePanel();
+    await click("I've done these steps");
     await vi.advanceTimersByTimeAsync(6000);
-    await until(hasHeading("We can't see your tablet yet"), 'not found');
+    await until(hasHeading('Still waiting for your tablet…'), 'still waiting');
+    expect(screen.getByText("We'll continue as soon as we see it. Meanwhile, check these:")).toBeVisible();
     expect(screen.getByText("Check it's the deep-flash cable, not a normal one.")).toBeVisible();
     expect(screen.getByText(/Use a USB-A port on the computer itself/)).toBeVisible();
     expect(screen.getByText('Waiting for your tablet…')).toBeVisible();
+    expect(button('Stop')).toBeVisible();
     expect(screen.getByText("Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal, and your tablet isn't broken.")).toBeVisible();
-    await click('Try again');
+    const answer = vi.spyOn(x.backend, 'answerPrompt');
+    await until(() => x.app.flow?.step === 'write' || x.app.flow?.step === 'verifyWrite' || x.app.flow?.status === 'done' || x.app.flow?.step === 'waitBoot', 'carried on');
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  test('rescue: "Show the steps again" goes back to holding the cable button', async () => {
+    await toLastCablePanel();
+    await click("I've done these steps");
+    await vi.advanceTimersByTimeAsync(6000);
+    await until(hasHeading('Still waiting for your tablet…'), 'still waiting');
+    await click('Show the steps again');
     await vi.advanceTimersByTimeAsync(1);
-    // Back on the guide, from holding the cable's button again.
     expect(heading("Hold the cable's button")).toBeVisible();
-    await until(() => screen.queryByText('Found it ✓') !== null || hasHeading('Writing to your tablet')(), 'found');
   });
 
   test('reinstall that switches to root keeps rendering', async () => {

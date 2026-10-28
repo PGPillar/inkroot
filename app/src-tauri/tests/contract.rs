@@ -125,6 +125,7 @@ fn enums_serialize_as_contract_literals() {
         ),
         (PromptKind::StillInEdl, "stillInEdl"),
         (PromptKind::TabletStarting, "tabletStarting"),
+        (PromptKind::CableGuide, "cableGuide"),
     ]);
     check(vec![
         (RescueOutcome::TabletBack, "tabletBack"),

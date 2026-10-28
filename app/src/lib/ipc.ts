@@ -81,7 +81,8 @@ export interface Prompt {
     | 'retryWrite'
     | 'connectionLostAfterWrite'
     | 'stillInEdl'
-    | 'tabletStarting';
+    | 'tabletStarting'
+    | 'cableGuide';
   options: PromptOption[];
 }
 

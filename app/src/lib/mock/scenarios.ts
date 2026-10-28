@@ -1,7 +1,7 @@
 import type { DeviceStatus, FlowResult, FlowState, Prompt, RescueOutcome, Settings } from '../ipc';
 import type { Beat, Scenario } from './engine';
 import {
-  cableCheckPrompt, checkDevice, edlNotFoundPrompt, enterEdl, patch, readPartitions, rebootToSystem,
+  cableCheckPrompt, checkDevice, edlNotFoundOffer, enterEdl, patch, readPartitions, rebootToSystem,
   reset, safetyCopy, step, verifyBackup, verifyRoot, verifyWrite, waitBoot, writeBoot,
 } from './fragments';
 import {
@@ -78,16 +78,41 @@ const rescueWait = (outcome: RescueOutcome): Beat[] => {
 };
 
 /** Rescue: pick, cable guide, wait for the tablet in rescue mode, write, reset, watch it start. */
-const rescueFlow = (o: { prefix?: Beat[]; waitEdl?: Beat[]; outcome?: RescueOutcome } = {}): Beat[] => [
+const CABLE_GUIDE: Omit<Prompt, 'id'> = {
+  kind: 'cableGuide',
+  options: [{ id: 'done', label: "I've done these steps", emphasis: 'primary' }],
+};
+/** Rescue step 2: the cable guide is up while the backend looks for the tablet. `done` starts the
+ *  wait (the `waitEdl` beats). With `meanwhile` the tablet can turn up before the guide is done;
+ *  without, the mock tablet only shows up once it's answered. */
+const cableGuide = (waitEdl: (again: () => Beat[]) => Beat[], meanwhile?: Beat[]): Beat[] => {
+  const again = (): Beat[] => [
+    step('cableGuide', 2),
+    {
+      prompt: CABLE_GUIDE,
+      meanwhile,
+      branches: { done: () => [step('waitEdl', 2), log('Cable steps done; waiting up to 60 s for the tablet in rescue (EDL) mode', 'info'), ...waitEdl(again)] },
+    },
+  ];
+  return again();
+};
+const FOUND_EDL: Beat[] = [{ wait: 1500 }, { device: EDL }, log('Found Qualcomm HS-USB QDLoader 9008 (05c6:9008)')];
+
+/** Never found: the tips stay up while the backend keeps looking; Try again starts the wait over. */
+const stillLooking = (): Beat[] => [
+  { wait: 6000 },
+  log("The tablet didn't show up in rescue mode in time; still looking", 'info'),
+  edlNotFoundOffer([{ wait: 3_600_000 }], () => [log('Looking for the tablet again', 'info'), ...stillLooking()]),
+];
+
+const rescueFlow = (o: { prefix?: Beat[]; waitEdl?: (again: () => Beat[]) => Beat[]; outcome?: RescueOutcome } = {}): Beat[] => [
   step('pickImage', 1),
   ...(o.prefix ?? []),
   log('Using boot_b.img from the selected backup'),
   { wait: 500 },
-  step('cableGuide', 2),
-  { wait: 2500 },
-  step('waitEdl', 2),
-  log('Waiting for Qualcomm HS-USB QDLoader 9008'),
-  ...(o.waitEdl ?? [{ wait: 1500 }, { device: EDL }, log('Found Qualcomm HS-USB QDLoader 9008 (05c6:9008)')]),
+  log('Waiting for your tablet in rescue (EDL) mode', 'info'),
+  // By default the tablet turns up while the guide is still being read, as with a quick user.
+  ...(o.waitEdl ? cableGuide(o.waitEdl) : cableGuide(() => FOUND_EDL, [{ wait: 2500 }, step('waitEdl', 2), ...FOUND_EDL])),
   ...writeBoot(3, 'b', 'boot_b.img'), ...verifyWrite(3), ...reset(3),
   ...rescueWait(o.outcome ?? 'tabletBack'),
 ];
@@ -294,15 +319,12 @@ const list: Scenario[] = [
       root: { code: 'busy', message: 'Inkroot is already working on something. Please wait for it to finish.', detail: 'flow mock-0 is active', suggestedAction: null },
     },
   }),
-  make('backup-edl-timeout', 'Backup: the tablet never shows up in rescue mode.', PLAIN, {
+  make('backup-edl-timeout', "Backup: the tablet never shows up in rescue mode; the tips stay up while Inkroot keeps looking.", PLAIN, {
     flows: {
       ...happyFlows(true),
       backup: [
-        ...checkDevice(1), step('enterEdl', 2), log('adb reboot edl'), { wait: 900 }, { device: NONE }, { wait: 6000 },
-        edlNotFoundPrompt([
-          { wait: 4000 },
-          { fail: { code: 'edlTimeout', message: "Your tablet didn't switch to rescue mode.", detail: 'No 05c6:9008 device after 60 s', suggestedAction: 'retry' } },
-        ]),
+        ...checkDevice(1), step('enterEdl', 2), log('adb reboot edl'), { wait: 900 }, { device: NONE },
+        ...stillLooking(),
       ],
     },
   }),
@@ -348,9 +370,11 @@ const list: Scenario[] = [
     flows: {
       ...happyFlows(true),
       rescue: rescueFlow({
-        waitEdl: [
+        // The tips show after the wait; the tablet turns up 4 s later and the rescue goes on by itself.
+        waitEdl: (again) => [
           { wait: 6000 },
-          edlNotFoundPrompt([{ wait: 1500 }, { device: EDL }, log('Found Qualcomm HS-USB QDLoader 9008 (05c6:9008)')]),
+          log("The tablet didn't show up in rescue mode in time; still looking", 'info'),
+          edlNotFoundOffer([{ wait: 4000 }, { device: EDL }, log('Found your tablet', 'info')], again),
         ],
       }),
     },
@@ -429,7 +453,9 @@ const list: Scenario[] = [
     },
   }),
   make('shot-rescue-cable', 'Screenshot: rescue, cable guide.', NONE, {
-    frozen: { flow: frozenFlow({ kind: 'rescue', step: 'cableGuide', stepIndex: 2 }) },
+    frozen: {
+      flow: frozenFlow({ kind: 'rescue', step: 'cableGuide', stepIndex: 2, status: 'waitingForUser', prompt: { id: 'shot-p', ...CABLE_GUIDE } }),
+    },
   }),
   // Screenshots of the cable-related prompts, frozen so their art can be looked at directly.
   make('shot-rescue-edl-not-found', "Screenshot: rescue, the tablet isn't seen in rescue mode yet.", NONE, {

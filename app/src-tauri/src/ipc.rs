@@ -182,6 +182,9 @@ pub enum PromptKind {
     KeepWaitingOrRescue,
     InstallDriver,
     InstallUdev,
+    /// The 9008 device didn't show up within `wait_edl`. Shown while the flow keeps polling
+    /// (it doesn't block it): the flow continues by itself once the tablet shows up.
+    /// Options `retry` (start the wait over) | `cancel`.
     EdlNotFound,
     RetryWrite,
     /// The write finished but the connection dropped for good before it could be checked:
@@ -192,6 +195,9 @@ pub enum PromptKind {
     /// Rescue: written, checked and restarted; Inkroot is watching for the tablet to start.
     /// Shown while the flow keeps polling (it doesn't block it): option `homeScreen`.
     TabletStarting,
+    /// Rescue step 2: the cable guide is on screen. Shown while the flow polls for the 9008
+    /// device; answering `done` (the last panel) starts the `wait_edl` timer.
+    CableGuide,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

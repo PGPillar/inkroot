@@ -14,7 +14,10 @@ export type Beat =
   | { progress: Omit<Progress, 'flowId'> }
   | { log: string; stream?: LogLine['stream'] }
   | { device: DeviceStatus }
-  | { prompt: Omit<Prompt, 'id'>; branches: Record<string, Branch> }
+  /** A prompt. With `meanwhile` it doesn't block (like the backend's offer): those beats run while it
+   *  is up and the prompt is taken down when they end; an answer drops them and runs its branch. */
+  | { prompt: Omit<Prompt, 'id'>; branches: Record<string, Branch>; meanwhile?: Beat[] }
+  | { withdraw: true }
   | { fail: Omit<FlowError, 'detail'> & { detail?: string } }
   | { done: FlowResult }
   | { cancelled: true }; // the user backed out at a prompt: status -> cancelled, ends script
@@ -40,7 +43,7 @@ const rejection = (code: FlowError['code'], message: string): FlowError => ({ co
 const isTerminal = (s: FlowState) => s.status === 'done' || s.status === 'failed' || s.status === 'cancelled';
 
 interface Frame { beats: Beat[]; i: number }
-interface Pending { promptId: string; branches: Record<string, Branch> }
+interface Pending { promptId: string; branches: Record<string, Branch>; meanwhile?: Frame }
 
 export function createMockBackend(s: Scenario, opts: { speed?: number } = {}): Backend {
   const speed = opts.speed && opts.speed > 0 ? opts.speed : 1;
@@ -114,7 +117,14 @@ export function createMockBackend(s: Scenario, opts: { speed?: number } = {}): B
         const prompt: Prompt = { ...beat.prompt, id: `prompt-${++promptCount}` };
         pending = { promptId: prompt.id, branches: beat.branches };
         apply({ status: 'waitingForUser', prompt });
-        return;
+        if (!beat.meanwhile) return;
+        pending.meanwhile = { beats: [...beat.meanwhile, { withdraw: true }], i: 0 };
+        frames.push(pending.meanwhile);
+      } else if ('withdraw' in beat) {
+        if (pending) {
+          pending = null;
+          apply({ status: 'running' });
+        }
       } else if ('fail' in beat) {
         apply({ status: 'failed', writing: false, error: { detail: '', ...beat.fail } });
         return finish();
@@ -198,7 +208,13 @@ export function createMockBackend(s: Scenario, opts: { speed?: number } = {}): B
       if (!state || state.flowId !== flowId || state.status !== 'waitingForUser' || !pending || pending.promptId !== promptId) return;
       if (!state.prompt?.options.some((o) => o.id === optionId)) return;
       const branch = pending.branches[optionId];
+      const meanwhile = pending.meanwhile;
       pending = null;
+      if (meanwhile) {
+        frames = frames.filter((f) => f !== meanwhile);
+        if (timer) clearTimeout(timer);
+        timer = null;
+      }
       apply({ status: 'running' });
       if (branch) frames.push({ beats: typeof branch === 'function' ? branch() : branch, i: 0 });
       timer = sleep(0, pump);

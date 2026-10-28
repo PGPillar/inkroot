@@ -135,6 +135,7 @@ pub fn prompt_options(kind: PromptKind) -> Vec<PromptOption> {
             "Done — I can see my home screen",
             Primary,
         )],
+        PromptKind::CableGuide => vec![opt("done", "I've done these steps", Primary)],
         PromptKind::EdlNotFound | PromptKind::RetryWrite => vec![
             opt("retry", "Try again", Primary),
             opt("cancel", "Cancel", Secondary),
@@ -626,6 +627,14 @@ impl FlowCtx {
             s.prompt = Some(p);
         });
         prompt
+    }
+
+    /// Takes down an `offer`ed prompt without moving to another step.
+    pub fn withdraw(&self) {
+        self.update(|s| {
+            s.status = FlowStatus::Running;
+            s.prompt = None;
+        });
     }
 
     /// The answer to an `offer`ed prompt, if one has arrived (never blocks). A cancel request

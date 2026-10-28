@@ -33,8 +33,11 @@
   const flow = $derived(app.flow);
   // The cable guide pages through its own panels (with their own refresh); the engine moving from
   // cableGuide to waitEdl underneath must not reset it.
+  // Its own cableGuide prompt (answered on the last panel) is part of it too.
   const cableGuide = $derived(
-    flow?.kind === 'rescue' && flow.status === 'running' && (flow.step === 'cableGuide' || flow.step === 'waitEdl'),
+    flow?.kind === 'rescue' &&
+      (flow.status === 'running' || (flow.status === 'waitingForUser' && flow.prompt?.kind === 'cableGuide')) &&
+      (flow.step === 'cableGuide' || flow.step === 'waitEdl'),
   );
   // One e-ink refresh per screen, per step, per status and per prompt.
   const refreshKey = $derived(

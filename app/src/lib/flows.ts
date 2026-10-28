@@ -29,6 +29,7 @@ export const ALL_PROMPT_KINDS: PromptKind[] = [
   'connectionLostAfterWrite',
   'stillInEdl',
   'tabletStarting',
+  'cableGuide',
 ];
 
 export const FLOW_STEP_COUNT: Record<FlowKind, number> = {

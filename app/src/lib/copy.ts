@@ -331,18 +331,19 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     body: "Linux needs permission to talk to your tablet in rescue mode. You'll be asked for your password once. Afterwards, unplug the tablet and plug it back in.",
     options: { install: 'Allow access', cancel: 'Not now' },
   },
+  // Non-blocking: Inkroot keeps looking while this is up and carries on by itself.
   edlNotFound: {
-    label: 'Not found yet',
-    heading: "We can't see your tablet yet",
-    body: '',
+    label: 'Still looking',
+    heading: 'Still waiting for your tablet…',
+    body: "We'll continue as soon as we see it. Meanwhile, check these:",
     bullets: [
       "Check it's the deep-flash cable, not a normal one.",
       'Use a USB-A port on the computer itself, not an adapter or hub.',
-      'Try again and keep holding the cable button a bit longer, about 15 seconds. The screen might not change.',
-      "Make sure the cable's button isn't pressed, then try again.",
+      'Choose “Show the steps again” and keep holding the cable button a bit longer, about 15 seconds. The screen might not change.',
+      "Once the steps are done, make sure the cable's button isn't pressed.",
       "A black screen, or a screen stuck on the last thing it showed, is normal. E-ink keeps its picture even in rescue mode.",
     ],
-    options: { retry: 'Try again', cancel: 'Stop' },
+    options: { retry: 'Show the steps again', cancel: 'Stop' },
   },
   retryWrite: {
     label: "Didn't check out",
@@ -367,6 +368,13 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     ],
     options: { retry: 'Try restarting again', heldPower: "I've restarted it" },
   },
+  // Rendered by the cable guide (its last panel answers it), not PromptView.
+  cableGuide: {
+    label: 'Cable',
+    heading: 'Put your tablet in rescue mode',
+    body: 'Follow the cable steps.',
+    options: { done: "I've done these steps" },
+  },
   // Rendered by the rescue waiting screen (RescueWait), not PromptView.
   tabletStarting: {
     label: 'Starting up',
@@ -377,10 +385,10 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
 };
 /** edlNotFound for every flow except rescue. */
 export const EDL_NOT_FOUND_AUTO: PromptCopy = {
-  label: 'Not found yet',
-  heading: "Your tablet didn't switch modes in time",
-  body: "Check the cable is firmly plugged in at both ends and that the cable's button isn't pressed, then try again. Nothing has been changed on your tablet.",
-  options: { retry: 'Try again', cancel: 'Stop' },
+  label: 'Still looking',
+  heading: 'Still waiting for your tablet…',
+  body: "We'll continue as soon as we see it. Check the cable is firmly plugged in at both ends and that the cable's button isn't pressed. Nothing has been changed on your tablet.",
+  options: { retry: 'Start the wait over', cancel: 'Stop' },
 };
 /** chooseSlot {hint} variants. */
 export const CHOOSE_SLOT_HINTS = {
@@ -558,6 +566,8 @@ export const CABLE_GUIDE_FOOT = {
 /** Cable guide controls: Back, the hold timers and the copy-search-terms feedback. */
 export const CABLE_GUIDE_NAV = {
   back: 'Back',
+  /** The last panel: starts Inkroot's 60 s wait for the tablet (answers cableGuide → done). */
+  done: "I've done these steps",
   timer: '{n} s · keep holding',
   timerDone: "Time's up ✓",
 } as const;

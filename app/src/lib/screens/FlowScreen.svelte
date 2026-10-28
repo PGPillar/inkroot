@@ -82,6 +82,9 @@
   </StepFrame>
 {:else if flow.kind === 'rescue' && flow.step === 'waitBoot'}
   <RescueWait {flow} />
+{:else if cable && (!flow.prompt || flow.prompt.kind === 'cableGuide')}
+  <!-- One branch for the guide with and without its prompt, so answering it doesn't remount it. -->
+  <CableGuide />
 {:else if flow.prompt}
   <PromptView
     prompt={flow.prompt}
@@ -94,8 +97,6 @@
     onOpen={(url) => void app.openExternal(url)}
     onCopy={(text) => void app.platform.copyText(text).catch(() => {})}
   />
-{:else if cable}
-  <CableGuide />
 {:else}
   <StepFrame {label} heading={copy.heading} body={copy.body}>
     {#snippet art()}

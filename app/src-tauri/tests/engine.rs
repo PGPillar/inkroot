@@ -138,6 +138,7 @@ fn prompt_options_match_contract() {
         ids(PromptKind::TabletStarting),
         s(&[("homeScreen", Primary)])
     );
+    assert_eq!(ids(PromptKind::CableGuide), s(&[("done", Primary)]));
     let labels: Vec<String> = prompt_options(PromptKind::CableCheck)
         .into_iter()
         .map(|o| o.label)
@@ -493,7 +494,7 @@ fn write_refuses_changed_image_bad_image() {
 }
 
 #[test]
-fn enter_edl_timeout_prompts_edl_not_found_then_retry_succeeds() {
+fn enter_edl_timeout_offers_tips_and_continues_when_the_tablet_shows_up() {
     let h = harness(stock_world());
     h.world.lock().faults.edl_never_appears = true;
     let id = h
@@ -512,8 +513,16 @@ fn enter_edl_timeout_prompts_edl_not_found_then_retry_succeeds() {
         .unwrap();
     let p = wait_prompt(&h, &id, "edlNotFound");
     assert!(h.clock.now() >= Duration::from_secs(60), "waited wait_edl");
-    h.world.lock().faults.edl_never_appears = false;
+    // "Try again" takes the tips down and starts the wait over; they come back after 60 s.
+    let again = h.clock.now();
     h.engine.answer(&id, &p.id, "retry");
+    let p2 = wait_state(&h, &id, |s| s.prompt.as_ref().is_some_and(|q| q.id != p.id))
+        .prompt
+        .unwrap();
+    assert_eq!(prompt_literal(&p2), "edlNotFound");
+    assert!(h.clock.now() - again >= Duration::from_secs(60));
+    // The tips don't block: the tablet shows up and the flow goes on with nothing answered.
+    h.world.lock().faults.edl_never_appears = false;
     let end = wait_terminal(&h, &id);
     assert_eq!(end.status, FlowStatus::Done, "{end:?}");
     let reboots = h

@@ -186,17 +186,27 @@ fn rescue_loose_file_asks_slot_when_unknown() {
     assert_eq!(ask.step_index, 1);
 }
 
+/// Waits for the non-blocking edlNotFound tips (the guide's prompt may still be up meanwhile).
+fn wait_tips(h: &Harness, id: &str) -> inkroot_lib::ipc::Prompt {
+    wait_state(h, id, |s| {
+        s.prompt
+            .as_ref()
+            .is_some_and(|p| prompt_literal(p) == "edlNotFound")
+    })
+    .prompt
+    .unwrap()
+}
+
 #[test]
-fn rescue_waits_then_edl_not_found_prompt() {
+fn rescue_wait_timer_starts_after_the_cable_guide_and_tips_never_block() {
     let h = harness(stock_world());
     let seeded = seed_stock_backup(&h);
     {
-        // Not in EDL yet: the user is still fiddling with the cable.
+        // Not in EDL yet: the user is still reading the cable guide.
         let mut w = h.world.lock();
         w.mode = Mode::Off;
         w.calls.clear();
     }
-    let t0 = h.clock.now();
     let id = h
         .engine
         .start(
@@ -207,19 +217,48 @@ fn rescue_waits_then_edl_not_found_prompt() {
             },
         )
         .unwrap();
-    let p = wait_prompt(&h, &id, "edlNotFound");
+    let guide = wait_prompt(&h, &id, "cableGuide");
+    let at = latest_state(&h, &id).unwrap();
+    assert_eq!(at.step, StepId::CableGuide);
+    assert_eq!(at.step_index, 2);
+    // However long the guide stays up, the wait for the tablet hasn't timed out.
+    let t0 = h.clock.now();
+    while h.clock.now() - t0 < Duration::from_secs(300) {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let s = latest_state(&h, &id).unwrap();
+    assert_eq!(
+        s.prompt.as_ref().map(|p| p.id.as_str()),
+        Some(guide.id.as_str())
+    );
+
+    // Finishing the guide starts the 60 s wait; then the tips show while polling goes on.
+    let done_at = h.clock.now();
+    h.engine.answer(&id, &guide.id, "done");
+    wait_tips(&h, &id);
+    assert!(h.clock.now() - done_at >= Duration::from_secs(60));
     let at = latest_state(&h, &id).unwrap();
     assert_eq!(at.step, StepId::WaitEdl);
     assert_eq!(at.step_index, 2);
-    assert!(h.clock.now() - t0 >= std::time::Duration::from_secs(60));
-    // Now it shows up; "Try again" polls again and the rescue completes.
+
+    // The tablet shows up: the rescue carries on by itself, with nothing answered.
     h.world.lock().mode = Mode::Edl;
-    h.engine.answer(&id, &p.id, "retry");
-    wait_state(&h, &id, |s| {
-        s.prompt.as_ref().map(|q| q.id.as_str()) != Some(p.id.as_str())
-    });
-    let end = drive(&h, &id, &[]);
+    let end = wait_terminal(&h, &id);
     assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert!(
+        h.events
+            .logs()
+            .iter()
+            .any(|l| l.line == "Found your tablet")
+    );
+    let chosen: Vec<String> = h
+        .events
+        .logs()
+        .into_iter()
+        .filter(|l| l.line.starts_with("You chose"))
+        .map(|l| l.line)
+        .collect();
+    assert_eq!(chosen, ["You chose: done"], "no answer after the guide");
     assert_eq!(resets(&h), 1);
     let calls = h.world.calls();
     let reset = calls
@@ -230,12 +269,37 @@ fn rescue_waits_then_edl_not_found_prompt() {
 }
 
 #[test]
+fn rescue_tips_try_again_shows_the_guide_again() {
+    let h = harness(stock_world());
+    let src = tempfile::tempdir().unwrap();
+    let (path, _) = write_img(src.path(), "boot_b.img", &fake_boot_image(4096, 9));
+    h.world.lock().mode = Mode::Off;
+    let id = h.engine.start(FlowKind::Rescue, loose(&path)).unwrap();
+    let g1 = wait_prompt(&h, &id, "cableGuide");
+    h.engine.answer(&id, &g1.id, "done");
+    let tips = wait_tips(&h, &id);
+    h.engine.answer(&id, &tips.id, "retry");
+    wait_state(&h, &id, |s| {
+        s.prompt
+            .as_ref()
+            .is_some_and(|p| p.id != g1.id && prompt_literal(p) == "cableGuide")
+    });
+    assert_eq!(latest_state(&h, &id).unwrap().step, StepId::CableGuide);
+    h.engine.cancel(&id).unwrap();
+    assert_eq!(wait_terminal(&h, &id).status, FlowStatus::Cancelled);
+}
+
+#[test]
 fn rescue_edl_not_found_cancel_writes_nothing() {
     let h = harness(stock_world());
     let src = tempfile::tempdir().unwrap();
     let (path, _) = write_img(src.path(), "boot_b.img", &fake_boot_image(4096, 9));
     h.world.lock().mode = Mode::Off;
-    let end = rescue(&h, loose(&path), &[("edlNotFound", "cancel")]);
+    let end = rescue(
+        &h,
+        loose(&path),
+        &[("cableGuide", "done"), ("edlNotFound", "cancel")],
+    );
     assert_eq!(end.status, FlowStatus::Cancelled, "{end:?}");
     assert!(!h.world.calls().iter().any(is_edl_call));
 }

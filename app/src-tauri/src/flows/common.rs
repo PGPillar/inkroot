@@ -5,8 +5,8 @@ use super::{FlowCtx, FlowEnd};
 use crate::device::probe;
 use crate::image::sha256_file;
 use crate::ipc::{
-    DeviceInfo, DeviceStatus, ErrorCode, FlowError, Gate, PromptKind, SettingsPatch, StepId,
-    SuggestedAction,
+    DeviceInfo, DeviceStatus, ErrorCode, FlowError, Gate, Prompt, PromptKind, SettingsPatch,
+    StepId, SuggestedAction,
 };
 use crate::profile::{DeviceProfile, MIN_BATTERY};
 use crate::tools::adb::{AdbState, RebootTarget};
@@ -155,18 +155,92 @@ pub fn check_device(
     Ok((serial, info, profile))
 }
 
-/// Polls USB for the EDL device every second, up to `wait_edl`.
-fn poll_edl(ctx: &FlowCtx) -> Result<Option<EdlUsbInfo>, FlowEnd> {
+/// Where `wait_for_edl` starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EdlWait {
+    /// Rescue: the cable guide is on screen; the `wait_edl` timer starts once the user has
+    /// finished it (answers the non-blocking `cableGuide` prompt).
+    Guide,
+    /// The `wait_edl` timer starts now.
+    Timer,
+    /// Show the tips (`edlNotFound`) right away.
+    Tips,
+}
+
+/// What `wait_for_edl` is showing while it polls.
+enum Phase {
+    Guide(Prompt),
+    Timer(Duration),
+    Tips(Prompt),
+}
+
+/// Polls USB for the EDL device every second until it shows up, however long that takes,
+/// and returns it. Nothing here blocks on the user: the cable guide and, once `wait_edl` has
+/// run out, the troubleshooting tips (`edlNotFound`) are offered while polling goes on, so the
+/// flow continues by itself as soon as the tablet appears. On the tips, `retry` starts the
+/// wait over (the guide again for rescue); `cancel` stops the flow.
+fn wait_for_edl(ctx: &FlowCtx, from: EdlWait) -> Result<EdlUsbInfo, FlowEnd> {
     let d = ctx.deps();
-    let start = d.clock.now();
+    let begin = |from: EdlWait| match from {
+        EdlWait::Guide => Phase::Guide(ctx.offer(PromptKind::CableGuide)),
+        EdlWait::Timer => Phase::Timer(d.clock.now()),
+        EdlWait::Tips => Phase::Tips(ctx.offer(PromptKind::EdlNotFound)),
+    };
+    // Offered after the first look, so a tablet that's already there never sees a prompt.
+    let mut phase: Option<Phase> = None;
     loop {
         ctx.check_cancel()?;
         if let Some(u) = d.usb.edl_device() {
-            return Ok(Some(u));
+            if let Some(Phase::Tips(p)) = &phase {
+                // Stop pressed just as the tablet showed up: Stop wins.
+                if ctx.poll_answer(p)?.is_some_and(|o| o != "retry") {
+                    return Err(FlowEnd::Cancelled);
+                }
+                ctx.info("Found your tablet");
+                ctx.withdraw();
+            } else if from == EdlWait::Guide && !matches!(phase, Some(Phase::Timer(_))) {
+                // Found before the guide was finished: take it down (step 2 still ends in waitEdl).
+                ctx.sub_step(StepId::WaitEdl);
+            }
+            return Ok(u);
         }
-        if d.clock.now().saturating_sub(start) >= d.timeouts.wait_edl {
-            return Ok(None);
-        }
+        phase = Some(match phase.take() {
+            None => begin(from),
+            Some(Phase::Guide(p)) => match ctx.poll_answer(&p)? {
+                Some(_) => {
+                    ctx.sub_step(StepId::WaitEdl);
+                    ctx.info(&format!(
+                        "Cable steps done; waiting up to {} s for the tablet in rescue (EDL) mode",
+                        d.timeouts.wait_edl.as_secs()
+                    ));
+                    Phase::Timer(d.clock.now())
+                }
+                None => Phase::Guide(p),
+            },
+            Some(Phase::Timer(start)) => {
+                if d.clock.now().saturating_sub(start) >= d.timeouts.wait_edl {
+                    ctx.info("The tablet didn't show up in rescue mode in time; still looking");
+                    Phase::Tips(ctx.offer(PromptKind::EdlNotFound))
+                } else {
+                    Phase::Timer(start)
+                }
+            }
+            Some(Phase::Tips(p)) => match ctx.poll_answer(&p)?.as_deref() {
+                // Never re-issue `adb reboot edl` (adb is gone by now): just look again.
+                Some("retry") => {
+                    ctx.info("Looking for the tablet again");
+                    if from == EdlWait::Guide {
+                        ctx.sub_step(StepId::CableGuide);
+                        begin(EdlWait::Guide)
+                    } else {
+                        ctx.withdraw();
+                        Phase::Timer(d.clock.now())
+                    }
+                }
+                Some(_) => return Err(FlowEnd::Cancelled),
+                None => Phase::Tips(p),
+            },
+        });
         d.clock.sleep(EDL_POLL);
     }
 }
@@ -184,7 +258,9 @@ fn install_driver(ctx: &FlowCtx) -> Result<(), FlowEnd> {
 }
 
 /// Gets the tablet into EDL mode (rebooting it via adb when `serial` is given and it isn't
-/// already there) and makes sure the computer may talk to it.
+/// already there) and makes sure the computer may talk to it. Without `serial` (rescue) the
+/// user brings it there with the cable guide, and the `wait_edl` timer only starts once they
+/// have finished it.
 pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
     let d = ctx.deps();
     ctx.check_cancel()?;
@@ -206,17 +282,14 @@ pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
             .reboot(s, RebootTarget::Edl)
             .map_err(|e| FlowEnd::Failed(e.into()))?;
     }
-    let usb = loop {
-        if let Some(u) = poll_edl(ctx)? {
-            break u;
-        }
-        ctx.info("The tablet didn't show up in rescue mode in time");
-        match ctx.ask(PromptKind::EdlNotFound)?.as_str() {
-            // Poll again; never re-issue `adb reboot edl` (adb is gone by now).
-            "retry" => continue,
-            _ => return Err(FlowEnd::Cancelled),
-        }
-    };
+    let usb = wait_for_edl(
+        ctx,
+        if serial.is_some() {
+            EdlWait::Timer
+        } else {
+            EdlWait::Guide
+        },
+    )?;
     ctx.info("Found the tablet in rescue (EDL) mode");
     if d.host.needs_edl_driver(&usb) {
         ctx.info(&format!(
@@ -309,21 +382,11 @@ pub fn write_and_verify(
                     break;
                 }
                 ctx.info("The tablet isn't showing in rescue (EDL) mode right now");
-                let again = matches!(ctx.ask(PromptKind::EdlNotFound), Ok(o) if o == "retry");
-                if !again {
+                if wait_for_edl(ctx, EdlWait::Tips).is_err() {
                     return Err(stop(
                         format!("tablet not in EDL before writing {part}"),
                         FlowEnd::Cancelled,
                     ));
-                }
-                match poll_edl(ctx) {
-                    Ok(_) => continue,
-                    Err(_) => {
-                        return Err(stop(
-                            format!("cancelled before writing {part}"),
-                            FlowEnd::Cancelled,
-                        ));
-                    }
                 }
             }
             // 3. Write. Once `writing` is set, cancel is rejected; a cancel that landed just

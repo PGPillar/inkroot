@@ -674,9 +674,13 @@ fn root_edl_not_found_cancel_resets_tablet_that_arrived_late() {
         .start(FlowKind::Root, FlowOptions::default())
         .unwrap();
     let p = wait_prompt(&h, &id, "edlNotFound");
-    // The tablet shows up just as the user gives up.
-    h.world.lock().faults.edl_never_appears = false;
-    h.engine.answer(&id, &p.id, "cancel");
+    {
+        // The tablet shows up just as the user presses Stop (both under the world lock, so the
+        // flow sees them together): Stop wins, and the tablet is restarted out of EDL.
+        let mut w = h.world.lock();
+        w.faults.edl_never_appears = false;
+        h.engine.answer(&id, &p.id, "cancel");
+    }
     let end = wait_terminal(&h, &id);
     assert_eq!(end.status, FlowStatus::Cancelled, "{end:?}");
     let calls = h.world.calls();

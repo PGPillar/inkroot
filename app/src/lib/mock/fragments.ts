@@ -1,5 +1,5 @@
 import type { DeviceStatus, Slot, StepId } from '../ipc';
-import type { Beat } from './engine';
+import type { Beat, Branch } from './engine';
 import { NOTE_MAX, adb } from './fixtures';
 
 const BOOT = 100663296;
@@ -182,7 +182,8 @@ export function cableCheckPrompt(idx: number): Beat[] {
   ];
 }
 
-export function edlNotFoundPrompt(onRetry: Beat[]): Beat {
+/** The non-blocking tips: `meanwhile` runs while they are up (the backend keeps polling). */
+export function edlNotFoundOffer(meanwhile: Beat[], retry: Branch = []): Beat {
   return {
     prompt: {
       kind: 'edlNotFound',
@@ -191,6 +192,7 @@ export function edlNotFoundPrompt(onRetry: Beat[]): Beat {
         { id: 'cancel', label: 'Cancel', emphasis: 'secondary' },
       ],
     },
-    branches: { retry: onRetry, cancel: [{ cancelled: true }] },
+    meanwhile,
+    branches: { retry, cancel: [{ cancelled: true }] },
   };
 }

@@ -162,7 +162,6 @@ pub fn run_rescue(ctx: &FlowCtx) -> Result<FlowResult, FlowEnd> {
     let picked = pick_image(ctx, &profile)?;
 
     ctx.step(StepId::CableGuide, 2, STEPS);
-    ctx.sub_step(StepId::WaitEdl);
     ctx.info("Waiting for your tablet in rescue (EDL) mode");
     enter_edl(ctx, None)?;
 

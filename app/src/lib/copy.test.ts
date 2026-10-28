@@ -9,7 +9,7 @@ const stripTech = (o: unknown): unknown => JSON.parse(JSON.stringify(o, (k, v) =
 
 test('ALL_* lists match the contract unions', () => {
   expect(new Set(ALL_STEP_IDS).size).toBe(20);
-  expect(ALL_PROMPT_KINDS).toHaveLength(11);
+  expect(ALL_PROMPT_KINDS).toHaveLength(12);
   expect(ALL_ERROR_CODES).toHaveLength(20);
   expect(new Set([...Object.values(FLOW_STEPS).flat(), 'done'])).toEqual(new Set(ALL_STEP_IDS));
 });
@@ -27,7 +27,7 @@ test.each(ALL_PROMPT_KINDS)('prompt copy for %s labels every contract option', (
     cableCheck: ['have', 'whereToGet', 'continueWithout'], cableCheckConfirm: ['confirmContinue', 'back'], chooseSlot: ['a', 'b'],
     keepWaitingOrRescue: ['keepWaiting', 'goToRescue'], installDriver: ['install', 'cancel'], installUdev: ['install', 'cancel'],
     edlNotFound: ['retry', 'cancel'], retryWrite: ['retry', 'cancel'], connectionLostAfterWrite: ['restartedOk', 'runAgain', 'cancel'], stillInEdl: ['retry', 'heldPower'],
-    tabletStarting: ['homeScreen'],
+    tabletStarting: ['homeScreen'], cableGuide: ['done'],
   }[k];
   expect(Object.keys(PROMPT_COPY[k].options).sort()).toEqual([...ids].sort());
 });
