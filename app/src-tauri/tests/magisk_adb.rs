@@ -74,7 +74,7 @@ fn push_patch_inputs_order_matches_build_and_flash() {
         .collect();
     want.extend([
         format!("{MGK_DIR}/init.bootsvc.rc"),
-        format!("{MGK_DIR}/stock_boot.img"),
+        format!("{MGK_DIR}/boot.img"),
         DEVICE_BOOTSVC.to_string(),
         DEVICE_SERVICE.to_string(),
     ]);
@@ -84,7 +84,7 @@ fn push_patch_inputs_order_matches_build_and_flash() {
         cmd: MGK_RESET_CMD.into()
     }));
     assert_eq!(
-        w.lock().files[&format!("{MGK_DIR}/stock_boot.img")],
+        w.lock().files[&format!("{MGK_DIR}/boot.img")],
         fake_boot_image(4096, 2)
     );
 }
@@ -113,6 +113,63 @@ fn run_patch_sends_exact_patch_cmd() {
     let bytes = std::fs::read(&f.out).unwrap();
     assert_eq!(bytes.len(), 4096);
     assert!(bytes.windows(15).any(|x| x == b"INKROOT-PATCHED"));
+}
+
+#[test]
+fn fake_patch_keeps_magisk_backup_copy_of_input() {
+    let w = stock_world();
+    let adb = FakeAdb::new(w.clone());
+    let f = fx();
+    push_all(&adb, &f);
+    let p = test_profile();
+    let t = Timeouts::default();
+    run_patch(&adb, NOTE_MAX_SERIAL, &p.magisk.patch_env, 4096, &f.out, &t).unwrap();
+    // Like Magisk's `cat $BOOTIMAGE > stock_boot.img`, the input survives and gets a copy.
+    let files = &w.lock().files;
+    assert_eq!(
+        files[&format!("{MGK_DIR}/boot.img")],
+        fake_boot_image(4096, 2)
+    );
+    assert_eq!(
+        files[&format!("{MGK_DIR}/stock_boot.img")],
+        fake_boot_image(4096, 2)
+    );
+}
+
+/// Regression (found on hardware): naming the input `stock_boot.img` lets Magisk's own
+/// `cat $BOOTIMAGE > stock_boot.img` truncate it, and the repack fails.
+#[test]
+fn old_stock_boot_img_input_fails_under_fake() {
+    use inkroot_lib::tools::adb::Adb;
+    let w = stock_world();
+    let adb = FakeAdb::new(w.clone());
+    let f = fx();
+    push_all(&adb, &f);
+    let img = std::fs::read(&f.stock).unwrap();
+    adb.push(
+        NOTE_MAX_SERIAL,
+        &f.stock,
+        &format!("{MGK_DIR}/stock_boot.img"),
+    )
+    .unwrap();
+    w.lock().files.remove(&format!("{MGK_DIR}/boot.img"));
+    assert_eq!(w.lock().files[&format!("{MGK_DIR}/stock_boot.img")], img);
+    let old = PATCH_CMD.replace(
+        "sh boot_patch.sh boot.img",
+        "sh boot_patch.sh stock_boot.img",
+    );
+    assert_ne!(old, PATCH_CMD);
+    let res = adb
+        .shell(NOTE_MAX_SERIAL, &old, Timeouts::default().patch)
+        .unwrap();
+    assert_ne!(res.code, 0);
+    assert!(
+        res.stderr.contains("Unable to repack boot image"),
+        "{res:?}"
+    );
+    let files = &w.lock().files;
+    assert!(files[&format!("{MGK_DIR}/stock_boot.img")].is_empty());
+    assert!(!files.contains_key(&format!("{MGK_DIR}/patched-boot.img")));
 }
 
 #[test]

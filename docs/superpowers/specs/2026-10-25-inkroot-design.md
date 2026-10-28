@@ -206,11 +206,13 @@ inline, as "Step 2 of 4 · Safety copy").
    APK; push `libmagiskboot.so→magiskboot`, `libmagiskinit.so→magiskinit`,
    `libmagisk.so→magisk`, `libinit-ld.so→init-ld`, `assets/boot_patch.sh`,
    `assets/util_functions.sh`, `assets/stub.apk`, and `init.bootsvc.rc` to
-   `/data/local/tmp/mgk/`; push the backed-up `boot_<slot>` as `stock_boot.img`; seed
+   `/data/local/tmp/mgk/`; push the backed-up `boot_<slot>` as `boot.img` (never `stock_boot.img`: for a stock image Magisk's
+   `boot_patch.sh` runs `cat $BOOTIMAGE > stock_boot.img` in its cwd to keep its own copy, which
+   would truncate an input of that name to 0 bytes and fail the repack — found on hardware); seed
    `bootsvc.sh` → `/data/local/tmp/bootsvc.sh` and the default service → `/data/local/tmp/service.sh`.
 2. Run, exactly:
    `cd /data/local/tmp/mgk && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld &&
-   KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh stock_boot.img &&
+   KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh boot.img &&
    ./magiskboot unpack new-boot.img &&
    ./magiskboot cpio ramdisk.cpio "add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc" &&
    ./magiskboot cpio ramdisk.cpio "ls overlay.d" | grep init.bootsvc &&

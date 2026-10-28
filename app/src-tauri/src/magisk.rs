@@ -21,7 +21,11 @@ pub const APK_PAYLOAD: [(&str, &str); 7] = [
     ("assets/stub.apk", "stub.apk"),
 ];
 /// spec §3.2 step 2 — byte-for-byte; run with `adb shell '<PATCH_CMD>'` semantics (single shell arg)
-pub const PATCH_CMD: &str = "cd /data/local/tmp/mgk && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld && KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh stock_boot.img && ./magiskboot unpack new-boot.img && ./magiskboot cpio ramdisk.cpio \"add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc\" && ./magiskboot cpio ramdisk.cpio \"ls overlay.d\" | grep init.bootsvc && ./magiskboot repack new-boot.img patched-boot.img";
+/// Name of the stock image pushed into `MGK_DIR` and handed to `boot_patch.sh`.
+/// Never `stock_boot.img`: for a stock image Magisk runs `cat $BOOTIMAGE > stock_boot.img`
+/// in its cwd to keep its own copy, which would truncate our input to 0 bytes first.
+pub const PATCH_INPUT: &str = "boot.img";
+pub const PATCH_CMD: &str = "cd /data/local/tmp/mgk && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld && KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh boot.img && ./magiskboot unpack new-boot.img && ./magiskboot cpio ramdisk.cpio \"add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc\" && ./magiskboot cpio ramdisk.cpio \"ls overlay.d\" | grep init.bootsvc && ./magiskboot repack new-boot.img patched-boot.img";
 pub const CHECK_DIR: &str = "/data/local/tmp/inkroot-check";
 pub const STOCK_CHECK_CMD: &str = "cd /data/local/tmp/inkroot-check && chmod 755 magiskboot && ./magiskboot unpack boot.img && ./magiskboot cpio ramdisk.cpio test";
 pub const HOOK_CHECK_CMD: &str = "cd /data/local/tmp/inkroot-check && chmod 755 magiskboot && ./magiskboot unpack boot.img && ./magiskboot cpio ramdisk.cpio \"ls overlay.d\" | grep init.bootsvc";
@@ -58,7 +62,7 @@ pub fn patch_command(env: &PatchEnv) -> Result<String, FlowError> {
         env.keepverity, env.keepforceencrypt, env.patchvbmetaflag, env.recoverymode
     );
     Ok(format!(
-        "cd {MGK_DIR} && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld && {flags} sh boot_patch.sh stock_boot.img && ./magiskboot unpack new-boot.img && ./magiskboot cpio ramdisk.cpio \"add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc\" && ./magiskboot cpio ramdisk.cpio \"ls overlay.d\" | grep init.bootsvc && ./magiskboot repack new-boot.img patched-boot.img"
+        "cd {MGK_DIR} && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld && {flags} sh boot_patch.sh boot.img && ./magiskboot unpack new-boot.img && ./magiskboot cpio ramdisk.cpio \"add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc\" && ./magiskboot cpio ramdisk.cpio \"ls overlay.d\" | grep init.bootsvc && ./magiskboot repack new-boot.img patched-boot.img"
     ))
 }
 
@@ -151,7 +155,7 @@ pub fn push_patch_inputs(
         push_one(adb, serial, local, &format!("{MGK_DIR}/{name}"))?;
     }
     push_one(adb, serial, rc, &format!("{MGK_DIR}/init.bootsvc.rc"))?;
-    push_one(adb, serial, stock_img, &format!("{MGK_DIR}/stock_boot.img"))?;
+    push_one(adb, serial, stock_img, &format!("{MGK_DIR}/{PATCH_INPUT}"))?;
     push_one(adb, serial, bootsvc, DEVICE_BOOTSVC)?;
     push_one(adb, serial, service, DEVICE_SERVICE)?;
     Ok(())
@@ -257,13 +261,27 @@ mod tests {
 
     #[test]
     fn patch_cmd_constant_is_spec_sequence() {
-        assert!(PATCH_CMD.contains("KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh stock_boot.img"));
+        assert!(PATCH_CMD.contains("KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh boot.img"));
         assert!(PATCH_CMD.contains("add 644 overlay.d/init.bootsvc.rc init.bootsvc.rc"));
         assert!(PATCH_CMD.ends_with("./magiskboot repack new-boot.img patched-boot.img"));
         assert_eq!(
             patch_command(&note_max().magisk.patch_env).unwrap(),
             PATCH_CMD
         );
+    }
+
+    #[test]
+    fn patch_input_is_never_magisks_own_backup_name() {
+        assert_eq!(PATCH_INPUT, "boot.img");
+        assert_ne!(PATCH_INPUT, "stock_boot.img");
+        let cmd = patch_command(&note_max().magisk.patch_env).unwrap();
+        let arg = cmd
+            .split("sh boot_patch.sh ")
+            .nth(1)
+            .and_then(|r| r.split_whitespace().next())
+            .unwrap();
+        assert_eq!(arg, PATCH_INPUT);
+        assert!(!cmd.contains("stock_boot.img"));
     }
 
     #[test]

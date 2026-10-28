@@ -446,9 +446,7 @@ fn root_patch_env_is_verity_safe() {
     let cmd = calls
         .iter()
         .find_map(|c| match c {
-            Call::Shell { cmd, .. } if cmd.contains("boot_patch.sh stock_boot.img") => {
-                Some(cmd.clone())
-            }
+            Call::Shell { cmd, .. } if cmd.contains("boot_patch.sh boot.img") => Some(cmd.clone()),
             _ => None,
         })
         .expect("patch command ran");
@@ -461,7 +459,7 @@ fn root_patch_env_is_verity_safe() {
     assert!(calls.iter().any(|c| matches!(
         c,
         Call::Push { local_name, remote } if local_name == "boot_b.img"
-            && remote == "/data/local/tmp/mgk/stock_boot.img"
+            && remote == "/data/local/tmp/mgk/boot.img"
     )));
     for remote in [
         "/data/local/tmp/mgk/init.bootsvc.rc",

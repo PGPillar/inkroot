@@ -186,6 +186,15 @@ impl World {
     }
 }
 
+/// If `c` is `PATCH_CMD` with any single-word input handed to `boot_patch.sh`, that input.
+fn patch_input(c: &str) -> Option<&str> {
+    const CALL: &str = "sh boot_patch.sh ";
+    let at = PATCH_CMD.find(CALL)? + CALL.len();
+    let post = PATCH_CMD[at..].strip_prefix(crate::magisk::PATCH_INPUT)?;
+    let mid = c.strip_prefix(&PATCH_CMD[..at])?.strip_suffix(post)?;
+    (!mid.is_empty() && !mid.contains(char::is_whitespace)).then_some(mid)
+}
+
 fn has_marker(b: &[u8]) -> bool {
     b.windows(PATCH_MARKER.len()).any(|w| w == PATCH_MARKER)
 }
@@ -381,11 +390,31 @@ impl Adb for FakeAdb {
                 w.files.retain(|k, _| !k.starts_with(MGK_DIR));
                 out(0, "", "")
             }
-            c if c == PATCH_CMD => {
-                let stock = w.files.get(&format!("{MGK_DIR}/stock_boot.img")).cloned();
+            c if patch_input(c).is_some() => {
+                let input = patch_input(c).unwrap_or_default().to_string();
+                let in_path = format!("{MGK_DIR}/{input}");
+                let backup = format!("{MGK_DIR}/stock_boot.img");
+                // Magisk 30.7 boot_patch.sh, stock image: `cat $BOOTIMAGE > stock_boot.img`
+                // in its cwd. When the input IS stock_boot.img the redirection truncates it
+                // before cat reads it, so the later repack mmaps an empty file and fails.
+                let stock = w.files.get(&in_path).cloned().map(|img| {
+                    if has_marker(&img) {
+                        return img;
+                    }
+                    let copy = if in_path == backup { Vec::new() } else { img };
+                    w.files.insert(backup.clone(), copy.clone());
+                    copy
+                });
                 match stock {
                     _ if w.faults.patch_fails => out(1, "", "boot_patch.sh: patch failed"),
-                    None => out(1, "", "stock_boot.img: No such file or directory"),
+                    None => out(1, "", &format!("{input}: No such file or directory")),
+                    Some(img) if img.is_empty() => out(
+                        1,
+                        "",
+                        &format!(
+                            "mmap '{input}': Invalid argument\n! Unable to repack boot image\n"
+                        ),
+                    ),
                     Some(mut img) => {
                         if !w.faults.patch_drops_marker {
                             // Overwrite the tail so the patched image keeps its size.

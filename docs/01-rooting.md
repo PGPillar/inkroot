@@ -74,12 +74,13 @@ adb push magisk_extract/lib/arm64-v8a/libmagisk.so     /data/local/tmp/mgk/magis
 adb push magisk_extract/lib/arm64-v8a/libinit-ld.so    /data/local/tmp/mgk/init-ld
 adb push magisk_extract/assets/boot_patch.sh magisk_extract/assets/util_functions.sh \
          magisk_extract/assets/stub.apk /data/local/tmp/mgk/
-adb push boot_b.stock.img /data/local/tmp/mgk/stock_boot.img
+# Don't name it stock_boot.img: Magisk writes its own copy under that name and would truncate it.
+adb push boot_b.stock.img /data/local/tmp/mgk/boot.img
 
 # 3. patch — NOTE the verity flags. This is the part that matters.
 adb shell 'cd /data/local/tmp/mgk && chmod 755 boot_patch.sh magiskboot magiskinit magisk init-ld && \
   KEEPVERITY=true KEEPFORCEENCRYPT=true PATCHVBMETAFLAG=false RECOVERYMODE=false \
-  sh boot_patch.sh stock_boot.img'
+  sh boot_patch.sh boot.img'
 
 # 4. pull the result
 adb pull /data/local/tmp/mgk/new-boot.img patched-boot.img
