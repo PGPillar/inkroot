@@ -500,3 +500,26 @@ fn rescue_driver_cancel_never_resets() {
     assert!(!h.world.calls().iter().any(is_edl_call));
     assert_eq!(h.world.lock().mode, Mode::Edl);
 }
+
+#[test]
+fn rescue_connection_lost_restarted_ok_skips_reset_and_watches_for_tablet() {
+    let h = harness(stock_world());
+    let seeded = seed_stock_backup(&h);
+    brick(&h);
+    h.world.lock().faults.vanish_on_verify_read = true;
+    let end = rescue(
+        &h,
+        FlowOptions {
+            backup_id: Some(seeded.id.clone()),
+            ..FlowOptions::default()
+        },
+        &[("connectionLostAfterWrite", "restartedOk")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(end.step, StepId::Done);
+    assert_eq!(resets(&h), 0);
+    assert_eq!(
+        end.result.unwrap().rescue_outcome,
+        Some(RescueOutcome::TabletBack)
+    );
+}

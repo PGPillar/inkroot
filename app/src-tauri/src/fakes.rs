@@ -560,6 +560,8 @@ impl Edl for FakeEdl {
             {
                 w.faults.vanish_on_verify_read = false;
                 w.mode = Mode::Off;
+                // The user will power-cycle the tablet by hand: it starts on its own.
+                w.pending_boot = true;
                 return Err(edl_err("USB error: No such device"));
             }
             if w.faults.read_fails_on.as_deref() == Some(part) {

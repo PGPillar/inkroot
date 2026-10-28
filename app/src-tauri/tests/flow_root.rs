@@ -901,3 +901,24 @@ fn root_uses_valid_known_hash_import() {
     );
     assert_eq!(end.status, FlowStatus::Done, "{end:?}");
 }
+
+#[test]
+fn root_connection_lost_restarted_ok_skips_reset_and_verifies_root() {
+    let h = harness(stock_world());
+    seed_backup(&h);
+    {
+        let mut w = h.world.lock();
+        w.faults.vanish_on_verify_read = true;
+    }
+    let end = run_root(
+        &h,
+        &[
+            ("cableCheck", "have"),
+            ("connectionLostAfterWrite", "restartedOk"),
+        ],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(end.result.unwrap().magisk_version.as_deref(), Some("30.7"));
+    let calls = h.world.calls();
+    assert_eq!(count(&calls, |c| matches!(c, Call::EdlReset)), 0);
+}
