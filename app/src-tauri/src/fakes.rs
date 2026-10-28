@@ -688,6 +688,8 @@ impl UsbProbe for FakeUsb {
 pub struct FakeHost {
     world: FakeWorld,
     needs_driver: std::sync::atomic::AtomicBool,
+    /// The driver is known to be missing before the tablet enters EDL (Windows pre-check).
+    needs_driver_ahead: std::sync::atomic::AtomicBool,
     needs_udev: std::sync::atomic::AtomicBool,
 }
 
@@ -696,12 +698,20 @@ impl FakeHost {
         Self {
             world,
             needs_driver: Default::default(),
+            needs_driver_ahead: Default::default(),
             needs_udev: Default::default(),
         }
     }
     pub fn set_needs_driver(&self, v: bool) {
         self.needs_driver
             .store(v, std::sync::atomic::Ordering::SeqCst);
+    }
+    /// As on a Windows PC that has never had the driver: the pre-check says it's missing, and
+    /// so does the check once the tablet is in EDL.
+    pub fn set_needs_driver_ahead(&self, v: bool) {
+        self.needs_driver_ahead
+            .store(v, std::sync::atomic::Ordering::SeqCst);
+        self.set_needs_driver(v);
     }
     pub fn set_needs_udev(&self, v: bool) {
         self.needs_udev
@@ -713,9 +723,13 @@ impl crate::host::setup::HostSetup for FakeHost {
     fn needs_edl_driver(&self, _usb: &EdlUsbInfo) -> bool {
         self.needs_driver.load(std::sync::atomic::Ordering::SeqCst)
     }
+    fn needs_edl_driver_before_edl(&self) -> bool {
+        self.needs_driver_ahead
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
     fn install_edl_driver(&self) -> Result<(), crate::ipc::FlowError> {
         self.world.lock().calls.push(Call::DriverInstall);
-        self.set_needs_driver(false);
+        self.set_needs_driver_ahead(false);
         Ok(())
     }
     fn needs_udev(&self) -> bool {

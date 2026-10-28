@@ -605,6 +605,77 @@ fn enter_edl_windows_driver_prompt() {
 }
 
 #[test]
+fn enter_edl_windows_installs_missing_driver_before_rebooting() {
+    let h = harness(stock_world());
+    h.host.set_needs_driver_ahead(true);
+    let flow = |ctx: &FlowCtx| {
+        ctx.step(StepId::EnterEdl, 1, 1);
+        enter_edl(ctx, Some(support::NOTE_MAX_SERIAL))?;
+        ok()
+    };
+    let end = run_flow_with(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        flow,
+        &[("installDriver", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    let install = calls.iter().position(|c| *c == Call::DriverInstall);
+    let reboot = calls.iter().position(support::is_reboot_edl_call);
+    assert!(
+        matches!((install, reboot), (Some(i), Some(r)) if i < r),
+        "driver must be installed before adb reboot edl: {calls:?}"
+    );
+    // Asked once: the check in EDL finds the driver in place.
+    assert_eq!(
+        calls.iter().filter(|c| **c == Call::DriverInstall).count(),
+        1
+    );
+
+    // Declining ends the flow before the tablet is sent anywhere.
+    let h = harness(stock_world());
+    h.host.set_needs_driver_ahead(true);
+    let end = run_flow_with(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        flow,
+        &[("installDriver", "cancel")],
+    );
+    assert_eq!(end.status, FlowStatus::Cancelled);
+    let calls = h.world.calls();
+    assert!(!calls.iter().any(support::is_reboot_edl_call), "{calls:?}");
+    assert!(!calls.iter().any(support::is_edl_call), "{calls:?}");
+}
+
+#[test]
+fn enter_edl_pre_check_skipped_when_already_in_edl() {
+    let h = harness(stock_world());
+    h.world.lock().mode = Mode::Edl;
+    h.host.set_needs_driver_ahead(true);
+    let end = run_flow_with(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        |ctx| {
+            ctx.step(StepId::EnterEdl, 1, 1);
+            enter_edl(ctx, Some(support::NOTE_MAX_SERIAL))?;
+            ok()
+        },
+        &[("installDriver", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    assert_eq!(
+        calls.iter().filter(|c| **c == Call::DriverInstall).count(),
+        1
+    );
+    assert!(!calls.iter().any(support::is_reboot_edl_call));
+}
+
+#[test]
 fn enter_edl_udev_prompt() {
     let h = harness(stock_world());
     h.host.set_needs_udev(true);

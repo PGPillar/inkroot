@@ -13,6 +13,12 @@ pub const UDEV_RULE: &str = "SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"05c6\", ATTR
 
 pub trait HostSetup: Send + Sync {
     fn needs_edl_driver(&self, usb: &EdlUsbInfo) -> bool;
+    /// Before the tablet is sent into EDL: true when the EDL driver is known to be missing, so
+    /// it can be installed first and the tablet's first hello isn't lost on a driverless
+    /// device. Only Windows ever says yes; `false` when it can't tell.
+    fn needs_edl_driver_before_edl(&self) -> bool {
+        false
+    }
     fn install_edl_driver(&self) -> Result<(), FlowError>;
     fn needs_udev(&self) -> bool;
     fn install_udev(&self) -> Result<(), FlowError>;
@@ -103,9 +109,7 @@ fn driver_missing(detail: String) -> FlowError {
 pub fn platform_host_setup(tools: &ToolPaths) -> Arc<dyn HostSetup> {
     #[cfg(windows)]
     {
-        Arc::new(WindowsSetup {
-            wdi: tools.wdi_simple(),
-        })
+        Arc::new(WindowsSetup::new(tools))
     }
     #[cfg(not(windows))]
     {
@@ -117,6 +121,8 @@ pub fn platform_host_setup(tools: &ToolPaths) -> Arc<dyn HostSetup> {
 #[cfg(windows)]
 pub struct WindowsSetup {
     wdi: std::path::PathBuf,
+    /// The driver was installed during this run of Inkroot.
+    installed: std::sync::atomic::AtomicBool,
 }
 
 #[cfg(windows)]
@@ -124,6 +130,7 @@ impl WindowsSetup {
     pub fn new(tools: &ToolPaths) -> Self {
         Self {
             wdi: tools.wdi_simple(),
+            installed: Default::default(),
         }
     }
 }
@@ -132,6 +139,16 @@ impl WindowsSetup {
 impl HostSetup for WindowsSetup {
     fn needs_edl_driver(&self, usb: &EdlUsbInfo) -> bool {
         !driver_is_winusb(usb.driver.as_deref())
+    }
+
+    fn needs_edl_driver_before_edl(&self) -> bool {
+        if self.installed.load(std::sync::atomic::Ordering::SeqCst) {
+            return false;
+        }
+        // Windows remembers every device node it has seen, with its bound service: WinUSB on
+        // any of them means it will bind WinUSB again when the tablet enters EDL.
+        crate::tools::usb::win::edl_nodes(false)
+            .is_some_and(|nodes| !crate::tools::usb::winusb_bound_before(&nodes))
     }
 
     fn install_edl_driver(&self) -> Result<(), FlowError> {
@@ -186,6 +203,8 @@ impl HostSetup for WindowsSetup {
                 "wdi-simple exited with code {code}"
             )));
         }
+        self.installed
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 

@@ -170,6 +170,18 @@ fn poll_edl(ctx: &FlowCtx) -> Result<Option<EdlUsbInfo>, FlowEnd> {
     }
 }
 
+/// Asks to install the EDL USB driver and installs it.
+fn install_driver(ctx: &FlowCtx) -> Result<(), FlowEnd> {
+    match ctx.ask(PromptKind::InstallDriver)?.as_str() {
+        "install" => {
+            ctx.info("Installing the USB driver");
+            ctx.deps().host.install_edl_driver()?;
+            Ok(())
+        }
+        _ => Err(FlowEnd::Cancelled),
+    }
+}
+
 /// Gets the tablet into EDL mode (rebooting it via adb when `serial` is given and it isn't
 /// already there) and makes sure the computer may talk to it.
 pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
@@ -182,6 +194,12 @@ pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
     if d.usb.edl_device().is_some() {
         ctx.info("The tablet is already in rescue (EDL) mode");
     } else if let Some(s) = serial {
+        // Windows: install the driver while the tablet is still in Android, so the tablet's
+        // first hello in EDL reaches a driver instead of being lost on a driverless device.
+        if d.host.needs_edl_driver_before_edl() {
+            ctx.info("The USB driver for rescue mode isn't installed yet");
+            install_driver(ctx)?;
+        }
         ctx.info("Restarting the tablet into rescue (EDL) mode");
         d.adb
             .reboot(s, RebootTarget::Edl)
@@ -200,13 +218,11 @@ pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
     };
     ctx.info("Found the tablet in rescue (EDL) mode");
     if d.host.needs_edl_driver(&usb) {
-        match ctx.ask(PromptKind::InstallDriver)?.as_str() {
-            "install" => {
-                ctx.info("Installing the USB driver");
-                d.host.install_edl_driver()?;
-            }
-            _ => return Err(FlowEnd::Cancelled),
-        }
+        ctx.info(&format!(
+            "The tablet's rescue-mode USB driver: {}",
+            usb.driver.as_deref().unwrap_or("none")
+        ));
+        install_driver(ctx)?;
     }
     // `needs_udev` is only ever true on Linux (the macOS/Windows host setups return false).
     if d.host.needs_udev() {

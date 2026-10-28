@@ -73,7 +73,7 @@ interface Prompt {
     | "cableCheckConfirm"   // options: confirmContinue | back
     | "chooseSlot"          // options: a | b
     | "keepWaitingOrRescue" // options: keepWaiting | goToRescue
-    | "installDriver"       // Windows: options: install | cancel
+    | "installDriver"       // Windows: options: install | cancel. Asked before `adb reboot edl` when Windows has never bound WinUSB to 05C6:9008, else once the 9008 device shows without WinUSB (a driverless one is found via SetupAPI)
     | "installUdev"         // Linux:   options: install | cancel
     | "edlNotFound"         // options: retry | cancel   (after 60 s waiting for 9008)
     | "retryWrite"          // hash mismatch: options: retry | cancel
