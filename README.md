@@ -60,6 +60,8 @@ Use at your own risk: modifying your tablet's software can brick it or void its 
 > through the deep-flash cable step by step and writes it back. Your screen may still show the last
 > thing it displayed while the tablet is in rescue mode or off, because e-ink keeps its picture. That's
 > normal. If the tablet needs a manual restart, hold the power button for up to 30 seconds.
+> Let go of the cable's button and don't touch it again until Inkroot says it's done — pressing it
+> during the transfer interrupts the connection.
 > → [Rescue guide](https://n0dal.github.io/inkroot/rescue/) · [manual EDL guide](docs/02-unbrick-edl.md)
 >
 > <img src="assets/screenshots/rescue-cable.png" width="360" alt="Inkroot Rescue: step-by-step instructions for connecting the tablet">

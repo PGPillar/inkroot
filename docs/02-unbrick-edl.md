@@ -57,7 +57,7 @@ don't have to supply one.
   2. Hold the cable's button (the D+/GND short).
   3. Plug the USB-C end into the tablet.
   4. Hold the tablet's **power button ~15 s**. The screen might not change.
-  5. Keep the cable button held **~10 more s**, then release.
+  5. Keep the cable button held **~10 more s**, then release. Let go of the button and don't touch it again until Inkroot says it's done — pressing it during the transfer interrupts the connection.
 
 Confirm the host sees it:
 ```bash

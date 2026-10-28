@@ -339,6 +339,7 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
       "Check it's the deep-flash cable, not a normal one.",
       'Use a USB-A port on the computer itself, not an adapter or hub.',
       'Try again and keep holding the cable button a bit longer, about 15 seconds. The screen might not change.',
+      "Make sure the cable's button isn't pressed, then try again.",
       "A black screen, or a screen stuck on the last thing it showed, is normal. E-ink keeps its picture even in rescue mode.",
     ],
     options: { retry: 'Try again', cancel: 'Stop' },
@@ -346,7 +347,7 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
   retryWrite: {
     label: "Didn't check out",
     heading: "That write didn't check out",
-    body: "Nothing is broken. The copy on your tablet didn't match, so we stopped before restarting it. Unplug the cable, plug it back in firmly, then try again.",
+    body: "Nothing is broken. The copy on your tablet didn't match, so we stopped before restarting it. Unplug the cable, plug it back in firmly. Make sure the cable's button isn't pressed, then try again.",
     options: { retry: 'Try again', cancel: 'Stop' },
   },
   stillInEdl: {
@@ -372,7 +373,7 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
 export const EDL_NOT_FOUND_AUTO: PromptCopy = {
   label: 'Not found yet',
   heading: "Your tablet didn't switch modes in time",
-  body: 'Check the cable is firmly plugged in at both ends, then try again. Nothing has been changed on your tablet.',
+  body: "Check the cable is firmly plugged in at both ends and that the cable's button isn't pressed, then try again. Nothing has been changed on your tablet.",
   options: { retry: 'Try again', cancel: 'Stop' },
 };
 /** chooseSlot {hint} variants. */
@@ -582,7 +583,7 @@ export const CABLE_GUIDE: CableStep[] = [
   },
   {
     id: 'c6', heading: 'Keep holding the cable button 10 more seconds',
-    body: 'Let go of the power button. Keep holding the cable button for about 10 more seconds, then let go.',
+    body: "Let go of the power button. Keep holding the cable button for about 10 more seconds. Let go of the button and don't touch it again until Inkroot says it's done — pressing it during the transfer interrupts the connection.",
     art: 'Hand on cable', secondary: 'Start a 10 s timer',
   },
 ];
