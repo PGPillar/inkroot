@@ -53,7 +53,17 @@ pub fn run() {
     use std::sync::Arc;
     use tauri::Manager;
 
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Must be the first plugin: a second launch focuses the running window and exits.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
+    let builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(commands::invoke_handler());
