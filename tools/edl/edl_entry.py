@@ -5,6 +5,13 @@ the app never calls it. Everything else is handed to edl unchanged.
 """
 import sys
 
+# edl's progress bar prints block characters (U+2588). On Windows a redirected stdout uses the
+# locale code page (cp1252), which can't encode them, so edl crashed mid-read. PYTHONUTF8 /
+# PYTHONIOENCODING are ignored by the frozen app, so force UTF-8 here, before edl prints anything.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def selftest():
     import io
