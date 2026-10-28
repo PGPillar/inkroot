@@ -26,6 +26,8 @@ impl CancelToken {
 pub struct CmdSpec {
     pub program: PathBuf,
     pub args: Vec<String>,
+    /// Extra environment variables for the child.
+    pub env: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +111,7 @@ pub fn run_filtered(
 ) -> Result<CmdOutput, ToolError> {
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
+        .envs(spec.env.iter().map(|(k, v)| (k, v)))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -272,6 +275,7 @@ mod tests {
         CmdSpec {
             program: "/bin/sh".into(),
             args: vec!["-c".into(), script.into()],
+            env: vec![],
         }
     }
 
@@ -375,6 +379,7 @@ mod tests {
         let spec = CmdSpec {
             program: "/nonexistent/adb".into(),
             args: vec![],
+            env: vec![],
         };
         let r = run(&spec, Duration::from_secs(5), None, &store(), &mut |_| {});
         let e = r.unwrap_err();

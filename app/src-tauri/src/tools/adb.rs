@@ -66,6 +66,24 @@ pub fn adb_args(serial: Option<&str>, rest: &[&str]) -> Vec<String> {
     v
 }
 
+/// Environment for every adb spawn. Inkroot only uses USB, so mDNS discovery is off; that keeps
+/// adb from opening network listeners (which trigger the Windows Firewall prompt). The server
+/// is never started with `-a`, so it stays on its default localhost-only port.
+pub fn adb_env() -> Vec<(String, String)> {
+    vec![
+        ("ADB_MDNS".to_string(), "0".to_string()),
+        ("ADB_MDNS_AUTO_CONNECT".to_string(), "0".to_string()),
+    ]
+}
+
+pub fn adb_spec(program: std::path::PathBuf, serial: Option<&str>, rest: &[&str]) -> CmdSpec {
+    CmdSpec {
+        program,
+        args: adb_args(serial, rest),
+        env: adb_env(),
+    }
+}
+
 /// Parses `adb devices` output. Ignores the header, blank lines and daemon chatter.
 pub fn parse_devices(out: &str) -> Vec<AdbDevice> {
     out.lines()
@@ -105,10 +123,7 @@ impl RealAdb {
         rest: &[&str],
         timeout: Duration,
     ) -> Result<CmdOutput, ToolError> {
-        let spec = CmdSpec {
-            program: self.path.clone(),
-            args: adb_args(serial, rest),
-        };
+        let spec = adb_spec(self.path.clone(), serial, rest);
         run(&spec, timeout, None, log, &mut |_| {})
     }
 
@@ -185,6 +200,17 @@ impl Adb for RealAdb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adb_spec_disables_mdns_and_stays_local() {
+        let spec = adb_spec("adb".into(), Some("X"), &["devices"]);
+        assert!(spec.env.contains(&("ADB_MDNS".into(), "0".into())));
+        assert!(
+            spec.env
+                .contains(&("ADB_MDNS_AUTO_CONNECT".into(), "0".into()))
+        );
+        assert!(!spec.args.iter().any(|a| a == "-a" || a.contains("0.0.0.0")));
+    }
 
     #[test]
     fn parse_devices_states() {

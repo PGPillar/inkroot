@@ -83,6 +83,7 @@ impl RealEdl {
         let spec = CmdSpec {
             program: self.path.clone(),
             args: edl_args(&self.loader, op),
+            env: vec![],
         };
         let total = self.part_size;
         let out = run_filtered(
