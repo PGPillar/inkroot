@@ -60,13 +60,14 @@
     max-width: 52ch;
     font: var(--fs-body);
   }
+  /* The art slot grows into spare room but never shrinks below its drawing: when space runs out
+     (e.g. the Details log is open) the page scrolls instead of the drawing sliding under the text. */
   .art,
   .spacer {
-    flex: 1;
+    flex: 1 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 0;
   }
   .actions {
     display: flex;

@@ -102,11 +102,14 @@
     flex-direction: column;
     overflow: hidden;
   }
+  /* Screens fill the space above the Details log; one that doesn't fit (Details open on a small
+     window) scrolls here rather than squeezing its blocks on top of each other. */
   main {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
   }
   main > :global(.flash) {
     flex: 1;
