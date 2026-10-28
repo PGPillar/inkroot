@@ -26,6 +26,7 @@ export const ALL_PROMPT_KINDS: PromptKind[] = [
   'installUdev',
   'edlNotFound',
   'retryWrite',
+  'stillInEdl',
 ];
 
 export const FLOW_STEP_COUNT: Record<FlowKind, number> = {

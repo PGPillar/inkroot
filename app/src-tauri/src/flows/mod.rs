@@ -121,6 +121,10 @@ pub fn prompt_options(kind: PromptKind) -> Vec<PromptOption> {
             opt("install", "Allow access", Primary),
             opt("cancel", "Cancel", Secondary),
         ],
+        PromptKind::StillInEdl => vec![
+            opt("retry", "Try restarting again", Primary),
+            opt("heldPower", "I've restarted it", Secondary),
+        ],
         PromptKind::EdlNotFound | PromptKind::RetryWrite => vec![
             opt("retry", "Try again", Primary),
             opt("cancel", "Cancel", Secondary),
@@ -644,10 +648,7 @@ impl FlowCtx {
         if d.usb.edl_device().is_none() {
             return;
         }
-        self.note_edl_reset();
         self.info("Restarting the tablet out of rescue mode (nothing was written to it)");
-        if let Err(e) = d.edl.reset() {
-            self.info(&format!("Restart command reported a problem: {e}"));
-        }
+        common::best_effort_restart(self);
     }
 }

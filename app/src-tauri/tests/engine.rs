@@ -122,6 +122,10 @@ fn prompt_options_match_contract() {
     for k in [PromptKind::EdlNotFound, PromptKind::RetryWrite] {
         assert_eq!(ids(k), s(&[("retry", Primary), ("cancel", Secondary)]));
     }
+    assert_eq!(
+        ids(PromptKind::StillInEdl),
+        s(&[("retry", Primary), ("heldPower", Secondary)])
+    );
     let labels: Vec<String> = prompt_options(PromptKind::CableCheck)
         .into_iter()
         .map(|o| o.label)

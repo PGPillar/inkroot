@@ -78,7 +78,8 @@ export interface Prompt {
     | 'installDriver'
     | 'installUdev'
     | 'edlNotFound'
-    | 'retryWrite';
+    | 'retryWrite'
+    | 'stillInEdl';
   options: PromptOption[];
 }
 

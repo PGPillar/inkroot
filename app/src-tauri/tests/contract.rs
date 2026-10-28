@@ -119,6 +119,7 @@ fn enums_serialize_as_contract_literals() {
         (PromptKind::InstallUdev, "installUdev"),
         (PromptKind::EdlNotFound, "edlNotFound"),
         (PromptKind::RetryWrite, "retryWrite"),
+        (PromptKind::StillInEdl, "stillInEdl"),
     ]);
     check(vec![
         (ErrorCode::NoDevice, "noDevice"),

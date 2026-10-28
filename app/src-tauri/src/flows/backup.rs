@@ -1,7 +1,9 @@
 //! Back up (spec §3.1): read boot_a/b and vbmeta_a/b over EDL, verify the active boot by a
 //! second read, decide stock, write a verified manifest. Root reuses `take_backup`.
 
-use super::common::{check_device, enter_edl, magisk_stock_check, wait_boot};
+use super::common::{
+    best_effort_restart, check_device, enter_edl, magisk_stock_check, restart_from_edl, wait_boot,
+};
 use super::{FlowCtx, FlowEnd};
 use crate::backup::{FirmwareInfo, Manifest, StockEvidence};
 use crate::image::{sha256_file, validate_boot_image};
@@ -49,11 +51,8 @@ pub(crate) fn firmware_of(info: &DeviceInfo, profile: &DeviceProfile) -> Firmwar
 
 /// Nothing was written to the tablet, so restarting it out of EDL is always safe here.
 fn best_effort_reset(ctx: &FlowCtx) {
-    ctx.note_edl_reset();
     ctx.info("Restarting the tablet (nothing was written to it)");
-    if let Err(e) = ctx.deps().edl.reset() {
-        ctx.info(&format!("Restart command reported a problem: {e}"));
-    }
+    best_effort_restart(ctx);
 }
 
 /// Removes the new backup folder if nothing ended up in it. A folder that already holds a
@@ -254,10 +253,7 @@ pub(crate) fn take_backup(
 
         // Back to Android (folded into verifyBackup's tail).
         ctx.sub_step(StepId::RebootToSystem);
-        ctx.note_edl_reset();
-        if let Err(e) = d.edl.reset() {
-            ctx.info(&format!("Restart command reported a problem: {e}"));
-        }
+        restart_from_edl(ctx)?;
         wait_boot(ctx, serial)?;
 
         // The magiskboot stock test needs the tablet back in Android.

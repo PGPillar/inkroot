@@ -184,6 +184,8 @@ pub enum PromptKind {
     InstallUdev,
     EdlNotFound,
     RetryWrite,
+    /// `edl reset` didn't get the tablet out of EDL: options `retry` | `heldPower`.
+    StillInEdl,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

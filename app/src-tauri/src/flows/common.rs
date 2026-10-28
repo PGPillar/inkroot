@@ -21,6 +21,10 @@ pub const EDL_MODE_MESSAGE: &str = "Your tablet is in rescue mode. Use Rescue to
 
 const EDL_POLL: Duration = Duration::from_secs(1);
 const BOOT_POLL: Duration = Duration::from_secs(2);
+/// How long the 9008 device may linger after `edl reset` before Inkroot tries again.
+pub const RESET_SETTLE: Duration = Duration::from_secs(10);
+/// `edl reset` attempts per round (the first plus two retries).
+pub const RESET_ATTEMPTS: u32 = 3;
 
 fn fail(
     code: ErrorCode,
@@ -346,11 +350,7 @@ pub fn write_and_verify(
                 Ok(_) => {
                     ctx.info(&format!("{part} matches"));
                     ctx.sub_step(StepId::Reset);
-                    ctx.note_edl_reset();
-                    if let Err(e) = d.edl.reset() {
-                        ctx.info(&format!("Restart command reported a problem: {e}"));
-                    }
-                    return Ok(());
+                    return restart_from_edl(ctx);
                 }
                 Err(detail) => {
                     // 6. No reset: the tablet stays in EDL so a retry or Rescue can fix it.
@@ -373,19 +373,116 @@ pub fn write_and_verify(
     })
 }
 
+/// Waits up to `RESET_SETTLE` for the 9008 device to go away. `cancellable` lets a cancel
+/// request cut the wait short (never on the best-effort paths, which run after a cancel).
+fn edl_left(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
+    let d = ctx.deps();
+    let start = d.clock.now();
+    loop {
+        if cancellable {
+            ctx.check_cancel()?;
+        }
+        if d.usb.edl_device().is_none() {
+            return Ok(true);
+        }
+        if d.clock.now().saturating_sub(start) >= RESET_SETTLE {
+            return Ok(false);
+        }
+        d.clock.sleep(EDL_POLL);
+    }
+}
+
+/// Sends `edl reset` up to `RESET_ATTEMPTS` times, until the tablet has left EDL. A reset
+/// that errors, or one that "succeeds" while the 9008 device is still there `RESET_SETTLE`
+/// later, is retried. Returns whether the tablet left EDL.
+fn reset_attempts(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
+    let d = ctx.deps();
+    for attempt in 1..=RESET_ATTEMPTS {
+        if attempt > 1 {
+            ctx.info(&format!(
+                "Trying the restart again (attempt {attempt} of {RESET_ATTEMPTS})"
+            ));
+        }
+        if let Err(e) = d.edl.reset() {
+            ctx.info(&format!("The restart command reported a problem: {e}"));
+        }
+        if edl_left(ctx, cancellable)? {
+            return Ok(true);
+        }
+        ctx.info("The tablet is still in rescue (EDL) mode");
+    }
+    Ok(false)
+}
+
+/// Restarts the tablet out of EDL after a matching write or a finished backup. Never waits
+/// silently: if `edl reset` can't get it out after `RESET_ATTEMPTS` tries, the user is asked to
+/// try again or hold the power button.
+pub fn restart_from_edl(ctx: &FlowCtx) -> Result<(), FlowEnd> {
+    let d = ctx.deps();
+    ctx.note_edl_reset();
+    ctx.info("Restarting the tablet");
+    let mut left = reset_attempts(ctx, true)?;
+    while !left {
+        match ctx.ask(PromptKind::StillInEdl)?.as_str() {
+            "retry" => left = reset_attempts(ctx, true)?,
+            // "heldPower": the user restarted it by hand. Give it a moment to drop off USB.
+            _ => {
+                left = edl_left(ctx, true)?;
+                if !left {
+                    ctx.info("The tablet still shows up in rescue (EDL) mode");
+                }
+            }
+        }
+    }
+    if d.usb.edl_device().is_none() {
+        ctx.info("The tablet has left rescue mode");
+    }
+    Ok(())
+}
+
+/// Best-effort restart out of EDL on a failure path (nothing written, or a verified copy
+/// already saved): retries like `restart_from_edl` but never asks and ignores cancel.
+pub fn best_effort_restart(ctx: &FlowCtx) {
+    ctx.note_edl_reset();
+    match reset_attempts(ctx, false) {
+        Ok(true) => {}
+        _ => ctx.info(
+            "The tablet is still in rescue mode. Hold its power button for about 10 seconds to restart it.",
+        ),
+    }
+}
+
+fn adb_state_name(s: AdbState) -> &'static str {
+    match s {
+        AdbState::Device => "device",
+        AdbState::Unauthorized => "unauthorized",
+        AdbState::Offline => "offline",
+    }
+}
+
 /// Waits for `serial` to come back as an authorized adb device.
 pub fn wait_boot(ctx: &FlowCtx, serial: &str) -> Result<(), FlowEnd> {
     let d = ctx.deps();
     ctx.info("Waiting for the tablet to restart");
+    // Only changes are logged: the poll runs every 2 s for minutes.
+    let mut seen: Option<AdbState> = None;
     loop {
         let start = d.clock.now();
         loop {
             ctx.check_cancel()?;
-            let up = d.adb.devices().is_ok_and(|v| {
-                v.iter()
-                    .any(|x| x.serial == serial && x.state == AdbState::Device)
-            });
-            if up {
+            let now = d
+                .adb
+                .devices()
+                .ok()
+                .and_then(|v| v.iter().find(|x| x.serial == serial).map(|x| x.state));
+            if now != seen {
+                match now {
+                    Some(st) => ctx.info(&format!("Tablet seen: {}", adb_state_name(st))),
+                    None => ctx.info("Tablet not visible over USB right now"),
+                }
+                seen = now;
+            }
+            if now == Some(AdbState::Device) {
                 ctx.info("The tablet has restarted");
                 return Ok(());
             }

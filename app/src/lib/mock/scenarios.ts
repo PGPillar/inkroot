@@ -94,11 +94,11 @@ const reinstallFlow = (): Beat[] => [
   { done: { magiskVersion: '30.7' } },
 ];
 
-interface RootOpts { hasBackup: boolean; patch?: Beat[]; write?: Beat[]; boot?: Beat[] }
+interface RootOpts { hasBackup: boolean; patch?: Beat[]; write?: Beat[]; reset?: Beat[]; boot?: Beat[] }
 /** Root from group 3 on (patch to verifyRoot), shared with the reinstall hook-absent path. */
 const rootCore = (o: RootOpts): Beat[] => [
   ...(o.patch ?? patch(3)), ...cableCheckPrompt(3), ...enterEdl(3),
-  ...(o.write ?? writeBoot(3, 'b')), ...verifyWrite(3), ...reset(3),
+  ...(o.write ?? writeBoot(3, 'b')), ...verifyWrite(3), ...(o.reset ?? reset(3)),
   ...(o.boot ?? waitBoot(4, ROOTED)), ...verifyRoot(4),
   { done: { backup: withPatched(o.hasBackup ? STOCK_BACKUP : NEW_BACKUP), magiskVersion: '30.7' } },
 ];
@@ -123,6 +123,32 @@ const keepWaitingPrompt = (): Beat[] => [
       ],
     },
     branches: { keepWaiting: () => [{ wait: 6000 }, ...keepWaitingPrompt()], goToRescue: [{ cancelled: true }] },
+  },
+];
+
+/** The restart command keeps failing; the tablet stays in rescue mode until the user steps in. */
+const stillInEdlReset = (): Beat[] => [
+  step('reset', 3),
+  log('edl reset --loader=prog_firehose_ddr.elf'),
+  { wait: 800 },
+  log('The restart command reported a problem: edl exited with code 1'),
+  log('Trying the restart again (attempt 2 of 3)'),
+  { wait: 800 },
+  log('Trying the restart again (attempt 3 of 3)'),
+  { wait: 800 },
+  log('The tablet is still in rescue (EDL) mode'),
+  {
+    prompt: {
+      kind: 'stillInEdl',
+      options: [
+        { id: 'retry', label: 'Try restarting again', emphasis: 'primary' },
+        { id: 'heldPower', label: "I've restarted it", emphasis: 'secondary' },
+      ],
+    },
+    branches: {
+      retry: [log('edl reset --loader=prog_firehose_ddr.elf'), { wait: 800 }, { device: NONE }, log('The tablet has left rescue mode')],
+      heldPower: [{ wait: 600 }, { device: NONE }, log('The tablet has left rescue mode')],
+    },
   },
 ];
 
@@ -166,6 +192,8 @@ const frozenFlow = (f: Partial<FlowState>): FlowState => ({
   prompt: null, error: null, result: null, writing: false, ...f,
 });
 
+const LONG_LOG = Array.from({ length: 40 }, (_, i) => `log line ${i + 1}: edl r boot_b readback.img --memory=ufs`);
+
 const list: Scenario[] = [
   make('ready', 'Note Max connected, one stock backup, risk notice already accepted.', PLAIN),
   make('no-backup', 'Note Max connected, no backups yet; root takes the safety copy first.', PLAIN, {
@@ -202,6 +230,9 @@ const list: Scenario[] = [
       ...happyFlows(true),
       root: rootFlow({ hasBackup: true, boot: [step('waitBoot', 4), log('Waiting for the tablet to start up'), { wait: 5000 }, ...keepWaitingPrompt()] }),
     },
+  }),
+  make('root-still-in-edl', 'Root: the tablet stays in rescue mode after the restart command.', PLAIN, {
+    flows: { ...happyFlows(true), root: rootFlow({ hasBackup: true, reset: stillInEdlReset() }) },
   }),
   make('root-patch-failed', 'Root: patching fails.', PLAIN, {
     flows: {
@@ -282,6 +313,40 @@ const list: Scenario[] = [
       flow: frozenFlow({ step: 'write', stepIndex: 3, writing: true }),
       progress: { flowId: 'mock-shot', done: 61865984, total: 100663296, label: 'boot_b' },
       logs: ['edl --memory=ufs w boot_b patched-boot.img'],
+    },
+  }),
+  // Layout checks (e2e/layout.spec.ts): busy step and prompt screens with a long log to open in Details.
+  make('shot-root-reset', 'Layout: root, restarting, with a long log.', PLAIN, {
+    frozen: { flow: frozenFlow({ step: 'reset', stepIndex: 3 }), logs: LONG_LOG },
+  }),
+  make('shot-root-boot-timeout', "Layout: root, the tablet hasn't restarted yet, with a long log.", PLAIN, {
+    frozen: {
+      flow: frozenFlow({
+        step: 'waitBoot', stepIndex: 4, status: 'waitingForUser',
+        prompt: {
+          id: 'shot-p', kind: 'keepWaitingOrRescue',
+          options: [
+            { id: 'keepWaiting', label: 'Keep waiting', emphasis: 'primary' },
+            { id: 'goToRescue', label: 'Go to Rescue', emphasis: 'secondary' },
+          ],
+        },
+      }),
+      logs: LONG_LOG,
+    },
+  }),
+  make('shot-root-still-in-edl', 'Layout: root, the tablet is still in rescue mode, with a long log.', PLAIN, {
+    frozen: {
+      flow: frozenFlow({
+        step: 'reset', stepIndex: 3, status: 'waitingForUser',
+        prompt: {
+          id: 'shot-p', kind: 'stillInEdl',
+          options: [
+            { id: 'retry', label: 'Try restarting again', emphasis: 'primary' },
+            { id: 'heldPower', label: "I've restarted it", emphasis: 'secondary' },
+          ],
+        },
+      }),
+      logs: LONG_LOG,
     },
   }),
   make('shot-rescue-cable', 'Screenshot: rescue, cable guide.', NONE, {

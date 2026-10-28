@@ -311,6 +311,17 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     body: "Nothing is broken. The copy on your tablet didn't match, so we stopped before restarting it. Unplug the cable, plug it back in firmly, then try again.",
     options: { retry: 'Try again', cancel: 'Stop' },
   },
+  stillInEdl: {
+    label: 'Still restarting',
+    heading: 'Your tablet is still in rescue mode',
+    body: "Nothing is wrong with it. Inkroot asked it to restart a few times, but it stayed where it was. You can restart it yourself.",
+    bullets: [
+      'Hold the power button for about 10 seconds, until the screen changes.',
+      "Then let go and choose “I've restarted it”.",
+      'Or choose “Try restarting again” to let Inkroot have another go.',
+    ],
+    options: { retry: 'Try restarting again', heldPower: "I've restarted it" },
+  },
 };
 /** edlNotFound for every flow except rescue. */
 export const EDL_NOT_FOUND_AUTO: PromptCopy = {

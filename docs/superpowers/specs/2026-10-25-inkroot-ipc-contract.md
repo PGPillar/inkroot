@@ -76,7 +76,8 @@ interface Prompt {
     | "installDriver"       // Windows: options: install | cancel
     | "installUdev"         // Linux:   options: install | cancel
     | "edlNotFound"         // options: retry | cancel   (after 60 s waiting for 9008)
-    | "retryWrite";         // hash mismatch: options: retry | cancel
+    | "retryWrite"          // hash mismatch: options: retry | cancel
+    | "stillInEdl";         // edl reset tried 3x, 9008 still present: options: retry | heldPower
   options: PromptOption[];
 }
 

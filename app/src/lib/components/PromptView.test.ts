@@ -8,7 +8,7 @@ import PromptView from './PromptView.svelte';
 const IDS: Record<PromptKind, string[]> = {
   cableCheck: ['have', 'whereToGet', 'continueWithout'], cableCheckConfirm: ['confirmContinue', 'back'], chooseSlot: ['a', 'b'],
   keepWaitingOrRescue: ['keepWaiting', 'goToRescue'], installDriver: ['install', 'cancel'], installUdev: ['install', 'cancel'],
-  edlNotFound: ['retry', 'cancel'], retryWrite: ['retry', 'cancel'],
+  edlNotFound: ['retry', 'cancel'], retryWrite: ['retry', 'cancel'], stillInEdl: ['retry', 'heldPower'],
 };
 const mk = (kind: PromptKind, ids = IDS[kind], emph: Record<string, 'primary' | 'secondary' | 'danger'> = {}, id = 'p1'): Prompt => ({
   id, kind, options: ids.map((i) => ({ id: i, label: 'raw-' + i, emphasis: emph[i] ?? 'secondary' })),

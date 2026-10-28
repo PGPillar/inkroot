@@ -183,6 +183,18 @@ describe('flow screen', () => {
     expect(checked[0].closest('label')).toHaveTextContent(STOCK_BACKUP.createdAt.slice(0, 10));
   });
 
+  test('tablet still in rescue mode: calm prompt with power-button steps, then carries on', async () => {
+    await setup('root-still-in-edl');
+    await click(/^Root/);
+    await until(hasHeading('Do you have a rescue cable?'), 'cable check');
+    await click('Yes, I have one');
+    await until(hasHeading('Your tablet is still in rescue mode'), 'still in rescue mode');
+    expect(screen.getByText(/Hold the power button for about 10 seconds/)).toBeVisible();
+    expect(button('Try restarting again')).toBeVisible();
+    await click("I've restarted it");
+    await until(hasHeading('Your Note Max is rooted.'), 'done');
+  });
+
   test('hash mismatch prompt then success', async () => {
     await setup('root-hash-mismatch');
     await click(/^Root/);

@@ -51,6 +51,11 @@ pub struct Faults {
     /// While the tablet is `Off`, it enters EDL this long after the first `edl_device()` poll
     /// (real time). Demo mode's bricked tablet.
     pub edl_appears_after: Option<Duration>,
+    /// The next N `edl reset` calls fail (edl exits 1, as with a usage error) and the tablet
+    /// stays in EDL. `u32::MAX` for never.
+    pub reset_errors: u32,
+    /// The next N `edl reset` calls report success but the tablet stays in EDL.
+    pub reset_ignored: u32,
 }
 
 /// Real-time pauses the fake tools take, so demo mode feels like the real thing. All zero by
@@ -579,6 +584,16 @@ impl Edl for FakeEdl {
         }
         if w.mode != Mode::Edl {
             return Err(edl_err("no Qualcomm device in EDL mode"));
+        }
+        if w.faults.reset_errors > 0 {
+            w.faults.reset_errors = w.faults.reset_errors.saturating_sub(1);
+            return Err(edl_err(
+                "Usage:\n    edl.py reset [--resetmode=mode] [--loader=filename]",
+            ));
+        }
+        if w.faults.reset_ignored > 0 {
+            w.faults.reset_ignored = w.faults.reset_ignored.saturating_sub(1);
+            return Ok(());
         }
         w.mode = Mode::Off;
         w.pending_boot = true;
