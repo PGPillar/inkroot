@@ -79,6 +79,7 @@ export interface Prompt {
     | 'installUdev'
     | 'edlNotFound'
     | 'retryWrite'
+    | 'connectionLostAfterWrite'
     | 'stillInEdl'
     | 'tabletStarting';
   options: PromptOption[];

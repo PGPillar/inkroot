@@ -184,6 +184,9 @@ pub enum PromptKind {
     InstallUdev,
     EdlNotFound,
     RetryWrite,
+    /// The write finished but the connection dropped for good before it could be checked:
+    /// options `restartedOk` | `runAgain` | `cancel`. Never followed by `edl reset`.
+    ConnectionLostAfterWrite,
     /// `edl reset` didn't get the tablet out of EDL: options `retry` | `heldPower`.
     StillInEdl,
     /// Rescue: written, checked and restarted; Inkroot is watching for the tablet to start.

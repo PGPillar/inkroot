@@ -119,6 +119,10 @@ fn enums_serialize_as_contract_literals() {
         (PromptKind::InstallUdev, "installUdev"),
         (PromptKind::EdlNotFound, "edlNotFound"),
         (PromptKind::RetryWrite, "retryWrite"),
+        (
+            PromptKind::ConnectionLostAfterWrite,
+            "connectionLostAfterWrite",
+        ),
         (PromptKind::StillInEdl, "stillInEdl"),
         (PromptKind::TabletStarting, "tabletStarting"),
     ]);

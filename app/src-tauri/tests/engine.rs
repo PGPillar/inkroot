@@ -123,6 +123,14 @@ fn prompt_options_match_contract() {
         assert_eq!(ids(k), s(&[("retry", Primary), ("cancel", Secondary)]));
     }
     assert_eq!(
+        ids(PromptKind::ConnectionLostAfterWrite),
+        s(&[
+            ("restartedOk", Primary),
+            ("runAgain", Secondary),
+            ("cancel", Secondary)
+        ])
+    );
+    assert_eq!(
         ids(PromptKind::StillInEdl),
         s(&[("retry", Primary), ("heldPower", Secondary)])
     );
@@ -1038,4 +1046,52 @@ fn poller_paused_while_flow_active() {
     poller.poll_once();
     assert!(devices(&h) > during, "poller resumed after the flow ended");
     poller.stop();
+}
+
+fn vanish_run(
+    returns_after: Option<u32>,
+    mismatch: bool,
+    answers: &[(&str, &str)],
+) -> (FlowState, Vec<Call>) {
+    let h = harness(stock_world());
+    {
+        let mut w = h.world.lock();
+        w.faults.vanish_on_verify_read = true;
+        w.faults.vanish_returns_after = returns_after;
+        if mismatch {
+            w.faults.write_corrupts_times = 1;
+        }
+    }
+    let (img, sha) = image_fixture(h.lib_dir.path(), 9);
+    let scratch = h.lib_dir.path().to_path_buf();
+    let end = run_flow_with(
+        &h,
+        FlowKind::Unroot,
+        FlowOptions::default(),
+        write_flow(img, sha, scratch),
+        answers,
+    );
+    (end, h.world.calls())
+}
+
+#[test]
+fn connection_drop_then_reconnect_and_match_resets_once_without_prompt() {
+    let (end, calls) = vanish_run(Some(3), false, &[]);
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert_eq!(calls.iter().filter(|c| **c == Call::EdlReset).count(), 1);
+}
+
+#[test]
+fn connection_drop_then_reconnect_with_mismatch_asks_retry_and_never_resets() {
+    let (end, calls) = vanish_run(Some(3), true, &[("retryWrite", "cancel")]);
+    assert_eq!(expect_failed(&end).code, ErrorCode::HashMismatch);
+    assert!(!calls.contains(&Call::EdlReset));
+}
+
+#[test]
+fn connection_drop_never_reappearing_asks_connection_lost_and_never_resets() {
+    let (end, calls) = vanish_run(None, false, &[("connectionLostAfterWrite", "runAgain")]);
+    let e = expect_failed(&end);
+    assert_eq!(e.suggested_action, Some(SuggestedAction::GoToRescue));
+    assert!(!calls.contains(&Call::EdlReset));
 }

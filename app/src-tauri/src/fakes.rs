@@ -37,6 +37,10 @@ pub struct Faults {
     pub write_corrupts_times: u32,
     /// The next N `edl w` calls fail (time out) with the tablet still in EDL.
     pub write_errors: u32,
+    /// After a write, the next read drops off USB ("No such device"); the 9008 device returns
+    /// after `vanish_returns_after` more `edl_device()` polls (`None`: never).
+    pub vanish_on_verify_read: bool,
+    pub vanish_returns_after: Option<u32>,
     pub patch_fails: bool,
     /// The fake patch writes `patched-boot.img` WITHOUT the marker, so the tablet boots unrooted.
     pub patch_drops_marker: bool,
@@ -551,6 +555,13 @@ impl Edl for FakeEdl {
             if w.faults.edl_never_appears {
                 return Err(edl_timeout());
             }
+            if w.faults.vanish_on_verify_read
+                && w.calls.iter().any(|c| matches!(c, Call::EdlWrite { .. }))
+            {
+                w.faults.vanish_on_verify_read = false;
+                w.mode = Mode::Off;
+                return Err(edl_err("USB error: No such device"));
+            }
             if w.faults.read_fails_on.as_deref() == Some(part) {
                 return Err(ToolError::Timeout {
                     tool: "edl".into(),
@@ -657,6 +668,14 @@ impl UsbProbe for FakeUsb {
             if started.elapsed() >= after {
                 w.mode = Mode::Edl;
                 w.faults.edl_appears_after = None;
+            }
+        }
+        if let (Mode::Off, Some(n)) = (w.mode, w.faults.vanish_returns_after) {
+            if n == 0 {
+                w.mode = Mode::Edl;
+                w.faults.vanish_returns_after = None;
+            } else {
+                w.faults.vanish_returns_after = Some(n - 1);
             }
         }
         (w.mode == Mode::Edl && !w.faults.edl_never_appears).then_some(EdlUsbInfo { driver: None })

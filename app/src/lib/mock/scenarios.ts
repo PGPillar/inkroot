@@ -197,6 +197,23 @@ const hashMismatchWrite = (): Beat[] => [
   },
 ];
 
+const connectionLostWrite = (): Beat[] => [
+  ...writeBoot(3, 'b'),
+  step('verifyWrite', 3),
+  log('USB error: No such device'),
+  {
+    prompt: {
+      kind: 'connectionLostAfterWrite',
+      options: [
+        { id: 'restartedOk', label: 'It started normally', emphasis: 'primary' },
+        { id: 'runAgain', label: 'Run Rescue again', emphasis: 'secondary' },
+        { id: 'cancel', label: 'Stop', emphasis: 'secondary' },
+      ],
+    },
+    branches: { restartedOk: [], runAgain: [{ cancelled: true }], cancel: [{ cancelled: true }] },
+  },
+];
+
 const happyFlows = (hasBackup: boolean): Scenario['flows'] => ({
   backup: backupFlow(),
   importBackup: importFlow({ backup: IMPORTED_STOCK }),
@@ -253,6 +270,9 @@ const list: Scenario[] = [
   }),
   make('root-hash-mismatch', 'Root: the write check fails once, retry works.', PLAIN, {
     flows: { ...happyFlows(true), root: rootFlow({ hasBackup: true, write: hashMismatchWrite() }) },
+  }),
+  make('root-connection-lost', 'Root: the connection drops while checking the write.', PLAIN, {
+    flows: { ...happyFlows(true), root: rootFlow({ hasBackup: true, write: connectionLostWrite() }) },
   }),
   make('root-boot-timeout', 'Root: the tablet takes too long to start.', PLAIN, {
     flows: {

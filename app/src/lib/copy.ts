@@ -350,6 +350,12 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     body: "Nothing is broken. The copy on your tablet didn't match, so we stopped before restarting it. Unplug the cable, plug it back in firmly. Make sure the cable's button isn't pressed, then try again.",
     options: { retry: 'Try again', cancel: 'Stop' },
   },
+  connectionLostAfterWrite: {
+    label: 'Connection dropped',
+    heading: 'The connection dropped while checking',
+    body: "Your tablet may already be fixed. Hold the power button for up to 30 seconds to restart it. If it starts normally, you're done. If not, run Rescue again.",
+    options: { restartedOk: 'It started normally', runAgain: 'Run Rescue again', cancel: 'Stop' },
+  },
   stillInEdl: {
     label: 'Still restarting',
     heading: 'Your tablet is still in rescue mode',

@@ -77,6 +77,7 @@ interface Prompt {
     | "installUdev"         // Linux:   options: install | cancel
     | "edlNotFound"         // options: retry | cancel   (after 60 s waiting for 9008)
     | "retryWrite"          // hash mismatch: options: retry | cancel
+    | "connectionLostAfterWrite" // write done, check lost the USB connection for good: options: restartedOk | runAgain | cancel. No edl reset.
     | "stillInEdl"          // edl reset tried 3x, 9008 still present: options: retry | heldPower
     | "tabletStarting";     // rescue step 4 only: options: homeScreen. Non-blocking: the backend keeps
                             // polling while it is shown; answering ends the wait (rescueOutcome "homeScreenSeen")

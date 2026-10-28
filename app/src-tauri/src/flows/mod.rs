@@ -125,6 +125,11 @@ pub fn prompt_options(kind: PromptKind) -> Vec<PromptOption> {
             opt("retry", "Try restarting again", Primary),
             opt("heldPower", "I've restarted it", Secondary),
         ],
+        PromptKind::ConnectionLostAfterWrite => vec![
+            opt("restartedOk", "It started normally", Primary),
+            opt("runAgain", "Run Rescue again", Secondary),
+            opt("cancel", "Cancel", Secondary),
+        ],
         PromptKind::TabletStarting => vec![opt(
             "homeScreen",
             "Done — I can see my home screen",

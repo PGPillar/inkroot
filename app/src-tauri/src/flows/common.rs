@@ -321,33 +321,74 @@ pub fn write_and_verify(
             }
             ctx.note_write_attempted();
             ctx.info(&format!("Writing {part}"));
-            let outcome = (|| -> Result<bool, String> {
+            let outcome = (|| -> Result<Outcome, String> {
                 d.edl
                     .write(part, img, &|done, total| {
                         ctx.progress(done, total, "Writing")
                     })
                     .map_err(|e| format!("write {part}: {e}"))?;
-                // 4. Read back. Cancel is rejected while writing, so a fresh token.
+                // 4. Read back. Cancel is rejected while writing, so a fresh token. If the
+                // connection drops mid-check, wait for the tablet to reappear and check again.
                 ctx.sub_step(StepId::VerifyWrite);
-                d.edl
-                    .read(part, &verify, &CancelToken::default(), &|done, total| {
-                        ctx.progress(done, total, "Checking")
-                    })
-                    .map_err(|e| format!("read back {part}: {e}"))?;
-                let got = sha256_file(&verify).map_err(|e| format!("hash read-back: {e}"))?;
-                if got.eq_ignore_ascii_case(expected_sha) {
-                    Ok(true)
-                } else {
-                    Err(format!(
-                        "read-back of {part}: sha256 {got}, expected {expected_sha}"
-                    ))
+                let mut attempts = 0;
+                loop {
+                    attempts += 1;
+                    let read = d
+                        .edl
+                        .read(part, &verify, &CancelToken::default(), &|done, total| {
+                            ctx.progress(done, total, "Checking")
+                        })
+                        .map_err(|e| format!("read back {part}: {e}"));
+                    match read {
+                        Ok(()) => {
+                            let got =
+                                sha256_file(&verify).map_err(|e| format!("hash read-back: {e}"))?;
+                            return if got.eq_ignore_ascii_case(expected_sha) {
+                                Ok(Outcome::Match {
+                                    reconnected: attempts > 1,
+                                })
+                            } else {
+                                Err(format!(
+                                    "read-back of {part}: sha256 {got}, expected {expected_sha}"
+                                ))
+                            };
+                        }
+                        Err(e) if connection_lost(&e, d.usb.edl_device().is_none()) => {
+                            ctx.info(&format!("The connection dropped during the check: {e}"));
+                            if !wait_for_edl_return(ctx) {
+                                return Ok(Outcome::Lost(e));
+                            }
+                            if attempts >= RECONNECT_ATTEMPTS {
+                                return Err(e);
+                            }
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
             })();
             // 5.
             ctx.set_writing(false);
             let _ = std::fs::remove_file(&verify);
             match outcome {
-                Ok(_) => {
+                Ok(Outcome::Lost(detail)) => {
+                    // The write finished but the check never could: don't reset, ask.
+                    return match ctx.ask(PromptKind::ConnectionLostAfterWrite) {
+                        Ok(o) if o == "restartedOk" => {
+                            ctx.info("The tablet started normally; the copy wasn't re-checked");
+                            Ok(())
+                        }
+                        _ => Err(fail(
+                            ErrorCode::HashMismatch,
+                            CONNECTION_LOST_MESSAGE,
+                            detail,
+                            Some(SuggestedAction::GoToRescue),
+                        )),
+                    };
+                }
+                Ok(Outcome::Match { reconnected }) => {
+                    if reconnected {
+                        ctx.info("Connection dropped during the check — reconnected and verified");
+                    }
                     ctx.info(&format!("{part} matches"));
                     ctx.sub_step(StepId::Reset);
                     return restart_from_edl(ctx);
@@ -371,6 +412,53 @@ pub fn write_and_verify(
             }
         }
     })
+}
+
+/// How long to wait for the tablet to come back after the connection drops during the check.
+const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
+const RECONNECT_POLL: Duration = Duration::from_secs(1);
+/// Read-back attempts in total (one retry after a reconnect).
+const RECONNECT_ATTEMPTS: u32 = 2;
+pub const CONNECTION_LOST_MESSAGE: &str = "The connection dropped while Inkroot was checking the copy on your tablet. It may already be fixed. Run Rescue again to be sure.";
+
+enum Outcome {
+    Match {
+        reconnected: bool,
+    },
+    /// The write finished, but the 9008 device vanished and never came back.
+    Lost(String),
+}
+
+/// A read-back error that looks like the USB connection went away (and the device is gone).
+fn connection_lost(err: &str, device_absent: bool) -> bool {
+    let e = err.to_lowercase();
+    device_absent
+        && [
+            "no such device",
+            "usb error",
+            "usberror",
+            "libusb",
+            "device not found",
+            "disconnected",
+            "no qualcomm device",
+        ]
+        .iter()
+        .any(|m| e.contains(m))
+}
+
+/// Polls up to `RECONNECT_WINDOW` for the 9008 device to reappear.
+fn wait_for_edl_return(ctx: &FlowCtx) -> bool {
+    let d = ctx.deps();
+    let start = d.clock.now();
+    loop {
+        if d.usb.edl_device().is_some() {
+            return true;
+        }
+        if d.clock.now().saturating_sub(start) >= RECONNECT_WINDOW {
+            return false;
+        }
+        d.clock.sleep(RECONNECT_POLL);
+    }
 }
 
 /// Waits up to `RESET_SETTLE` for the 9008 device to go away. `cancellable` lets a cancel

@@ -91,6 +91,8 @@
           <DeepFlashCable highlight="button" width={360} title={copy.heading} />
         {:else if prompt.kind === 'keepWaitingOrRescue'}
           <Tablet screen="logo" width={124} title={copy.heading} />
+        {:else if prompt.kind === 'connectionLostAfterWrite'}
+          <PressIndicator width={132} seconds={30} title={copy.heading} />
         {:else if prompt.kind === 'stillInEdl'}
           <PressIndicator width={132} seconds={10} title={copy.bullets?.[0] ?? copy.heading} />
         {:else if prompt.kind === 'installDriver' || prompt.kind === 'installUdev'}
