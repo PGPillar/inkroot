@@ -411,6 +411,39 @@ const list: Scenario[] = [
     appInfo: { os: 'linux', backupRoot: '/home/you/Documents/Inkroot' },
     flows: { ...happyFlows(true), rescue: rescueFlow({ prefix: driverPrompt('installUdev', 'the USB access rule') }) },
   }),
+  make('linux-usb-permission', 'Linux: backup asks for USB access before sending the tablet to rescue mode.', PLAIN, {
+    appInfo: { os: 'linux', backupRoot: '/home/you/Documents/Inkroot' },
+    flows: {
+      ...happyFlows(true),
+      backup: [
+        ...checkDevice(1), step('enterEdl', 2),
+        log("This computer doesn't let Inkroot use the tablet in rescue mode yet", 'info'),
+        ...driverPrompt('installUdev', 'the USB access rule'),
+        ...enterEdl(2), ...readPartitions(3), ...verifyBackup(4), ...rebootToSystem(4),
+        { done: { backup: NEW_BACKUP } },
+      ],
+    },
+  }),
+  make('linux-usb-permission-failed', 'Linux: Inkroot still has no USB access after the rule was installed.', PLAIN, {
+    appInfo: { os: 'linux', backupRoot: '/home/you/Documents/Inkroot' },
+    flows: {
+      ...happyFlows(true),
+      backup: [
+        ...checkDevice(1), ...enterEdl(2),
+        step('readPartitions', 3), log('usb.core.USBError: [Errno 13] Access denied (insufficient permissions)', 'stderr'),
+        ...driverPrompt('installUdev', 'the USB access rule'),
+        log('Inkroot still can\'t open the tablet in rescue mode', 'info'),
+        {
+          fail: {
+            code: 'usbPermission',
+            message: "Inkroot doesn't have permission to talk to your tablet in rescue mode. Unplug the tablet, plug it back in, then try again. Nothing was changed on it.",
+            detail: 'udev rule installed, but the rescue-mode USB device still isn\'t accessible after 5s',
+            suggestedAction: 'retry',
+          },
+        },
+      ],
+    },
+  }),
   make('shot-root-writing', 'Screenshot: root, mid-write.', PLAIN, {
     frozen: {
       flow: frozenFlow({ step: 'write', stepIndex: 3, writing: true }),

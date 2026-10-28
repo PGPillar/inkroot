@@ -327,8 +327,8 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
   },
   installUdev: {
     label: 'One-time setup',
-    heading: 'One quick setup step',
-    body: "Linux needs permission to talk to your tablet in rescue mode. You'll be asked for your password once. Afterwards, unplug the tablet and plug it back in.",
+    heading: 'Inkroot needs permission to use USB',
+    body: "Your computer doesn't yet let Inkroot talk to your tablet in rescue mode. Allowing it is a one-time step: you'll be asked for your password once, then Inkroot carries on. Nothing has been changed on your tablet.",
     options: { install: 'Allow access', cancel: 'Not now' },
   },
   // Non-blocking: Inkroot keeps looking while this is up and carries on by itself.
@@ -417,7 +417,7 @@ export const ERROR_HEADINGS: Record<ErrorCode, string> = {
   noStockBackup: 'We need an original safety copy',
   badImage: "That file can't be used",
   notStock: "That copy isn't original",
-  edlTimeout: "Your tablet didn't switch modes",
+  edlTimeout: 'Lost contact with your tablet',
   edlNotAnswering: "Your tablet isn't answering",
   hashMismatch: "That write didn't check out",
   patchFailed: "Preparing root didn't work",
@@ -425,6 +425,7 @@ export const ERROR_HEADINGS: Record<ErrorCode, string> = {
   verifyFailed: "Root didn't start",
   toolMissing: 'Inkroot is missing a part',
   driverMissing: 'A driver is missing',
+  usbPermission: 'Inkroot needs permission to use USB',
   busy: 'Inkroot is busy with another job',
   internal: 'Something went wrong',
 };

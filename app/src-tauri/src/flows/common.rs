@@ -12,7 +12,7 @@ use crate::profile::{DeviceProfile, MIN_BATTERY};
 use crate::tools::adb::{AdbState, RebootTarget};
 use crate::tools::process::CancelToken;
 use crate::tools::usb::EdlUsbInfo;
-use crate::tools::{ToolError, not_answering};
+use crate::tools::{ToolError, not_answering, usb_permission};
 use std::path::Path;
 use std::time::Duration;
 
@@ -268,9 +268,16 @@ pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
         // From here a failure or cancel before any write restarts the tablet (flows/mod.rs).
         ctx.note_edl_entered();
     }
-    if d.usb.edl_device().is_some() {
+    let already = d.usb.edl_device().is_some();
+    if already {
         ctx.info("The tablet is already in rescue (EDL) mode");
-    } else if let Some(s) = serial {
+    } else if d.host.needs_udev() {
+        // Linux: ask for USB access while the tablet is still in Android (or before the cable
+        // guide), like the Windows driver below, so the prompt comes first.
+        ctx.info("This computer doesn't let Inkroot use the tablet in rescue mode yet");
+        grant_usb_access(ctx)?;
+    }
+    if let (false, Some(s)) = (already, serial) {
         // Windows: install the driver while the tablet is still in Android, so the tablet's
         // first hello in EDL reaches a driver instead of being lost on a driverless device.
         if d.host.needs_edl_driver_before_edl() {
@@ -299,16 +306,53 @@ pub fn enter_edl(ctx: &FlowCtx, serial: Option<&str>) -> Result<(), FlowEnd> {
         install_driver(ctx)?;
     }
     // `needs_udev` is only ever true on Linux (the macOS/Windows host setups return false).
+    // Now that the device is here, it means "this user can't open its node".
     if d.host.needs_udev() {
-        match ctx.ask(PromptKind::InstallUdev)?.as_str() {
-            "install" => {
-                ctx.info("Allowing access to the tablet in rescue mode");
-                d.host.install_udev()?;
-            }
-            _ => return Err(FlowEnd::Cancelled),
-        }
+        ctx.info("This computer doesn't let Inkroot open the tablet in rescue mode");
+        grant_usb_access(ctx)?;
     }
     Ok(())
+}
+
+/// How long a freshly installed udev rule may take to reach a 9008 device that's plugged in.
+pub const UDEV_SETTLE: Duration = Duration::from_secs(5);
+const UDEV_POLL: Duration = Duration::from_millis(500);
+
+/// Linux: asks for USB access (`installUdev`), installs the rule (one password prompt), then
+/// waits up to `UDEV_SETTLE` until Inkroot can open the 9008 device (when it's plugged in).
+/// Declining cancels; access still missing afterwards fails with `usbPermission`.
+pub fn grant_usb_access(ctx: &FlowCtx) -> Result<(), FlowEnd> {
+    let d = ctx.deps();
+    match ctx.ask(PromptKind::InstallUdev)?.as_str() {
+        "install" => {}
+        _ => return Err(FlowEnd::Cancelled),
+    }
+    ctx.info("Allowing access to the tablet in rescue mode");
+    d.host.install_udev()?;
+    let start = d.clock.now();
+    while d.host.needs_udev() {
+        if d.clock.now().saturating_sub(start) >= UDEV_SETTLE {
+            ctx.info("Inkroot still can't open the tablet in rescue mode");
+            return Err(FlowEnd::Failed(usb_permission(format!(
+                "udev rule installed, but the rescue-mode USB device still isn't accessible after {}s",
+                UDEV_SETTLE.as_secs()
+            ))));
+        }
+        d.clock.sleep(UDEV_POLL);
+    }
+    ctx.info("Inkroot may now use the tablet in rescue mode");
+    Ok(())
+}
+
+/// After edl couldn't open the 9008 device for lack of permission: asks for access once
+/// (`asked` remembers it) when the host can grant it, so the caller can try again. Otherwise
+/// fails with `usbPermission`.
+pub fn regain_usb_access(ctx: &FlowCtx, asked: &mut bool, detail: String) -> Result<(), FlowEnd> {
+    if !*asked && ctx.deps().host.needs_udev() {
+        *asked = true;
+        return grant_usb_access(ctx);
+    }
+    Err(FlowEnd::Failed(usb_permission(detail)))
 }
 
 /// Holds keep-awake for the duration of `f`.
@@ -343,6 +387,8 @@ pub fn write_and_verify(
             untouched
         }
     };
+    // Asked for USB access once already (after edl couldn't open the device).
+    let mut asked_access = false;
     with_keep_awake(ctx, || {
         loop {
             ctx.sub_step(StepId::Write);
@@ -410,6 +456,10 @@ pub fn write_and_verify(
                     Err(e @ ToolError::Stalled { .. }) => {
                         return Ok(Outcome::NotAnswering(format!("write {part}: {e:?}")));
                     }
+                    // edl couldn't open the device, so nothing reached the tablet.
+                    Err(e @ ToolError::UsbPermission { .. }) => {
+                        return Ok(Outcome::NoPermission(format!("write {part}: {e:?}")));
+                    }
                     Err(e) => return Err(format!("write {part}: {e}")),
                 }
                 // 4. Read back. Cancel is rejected while writing, so a fresh token. If the
@@ -464,6 +514,11 @@ pub fn write_and_verify(
                 Ok(Outcome::NotAnswering(detail)) => {
                     ctx.note_edl_unresponsive();
                     return Err(FlowEnd::Failed(not_answering(detail)));
+                }
+                Ok(Outcome::NoPermission(detail)) => {
+                    ctx.info("Inkroot isn't allowed to open the tablet in rescue mode");
+                    regain_usb_access(ctx, &mut asked_access, detail)?;
+                    continue;
                 }
                 Ok(Outcome::Lost(detail)) => {
                     // The write finished but the check never could: don't reset, ask.
@@ -525,6 +580,8 @@ enum Outcome {
     Lost(String),
     /// edl never got past the handshake for the write: nothing was written.
     NotAnswering(String),
+    /// edl wasn't allowed to open the USB device for the write: nothing was written.
+    NoPermission(String),
 }
 
 /// A read-back error that looks like the USB connection went away (and the device is gone).

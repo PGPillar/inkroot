@@ -234,6 +234,29 @@ describe('flow screen', () => {
     expect(start).toHaveBeenCalledWith('backup', {});
   });
 
+  test('Linux asks for USB access first, then carries on', async () => {
+    const x = await setup('linux-usb-permission');
+    await x.app.startJob('backup');
+    await until(hasHeading('Inkroot needs permission to use USB'), 'usb permission prompt');
+    expect(screen.getByText(/you'll be asked for your password once/)).toBeVisible();
+    await click('Allow access');
+    await until(() => x.app.flow?.status === 'done', 'backup done');
+  });
+
+  test('USB access still missing says so, not that the tablet was lost', async () => {
+    const x = await setup('linux-usb-permission-failed');
+    await x.app.startJob('backup');
+    await until(hasHeading('Inkroot needs permission to use USB'), 'usb permission prompt');
+    await click('Allow access');
+    await until(() => x.app.flow?.status === 'failed', 'failure');
+    expect(heading('Inkroot needs permission to use USB')).toBeVisible();
+    expect(screen.getByText(/doesn't have permission to talk to your tablet in rescue mode/)).toBeVisible();
+    expect(screen.queryByText(/switch modes|lost contact/i)).toBeNull();
+    const start = vi.spyOn(x.app, 'startJob');
+    await click('Try again');
+    expect(start).toHaveBeenCalledWith('backup', {});
+  });
+
   test('failure for a tablet found in rescue mode goes to Rescue', async () => {
     const x = await setup('ready');
     x.emit.state!({

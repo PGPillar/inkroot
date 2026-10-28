@@ -511,3 +511,138 @@ fn backup_no_handshake_fails_not_answering_and_sends_nothing_else() {
     assert!(!calls.iter().any(|c| matches!(c, Call::EdlWrite { .. })));
     assert!(manifest_files(&h).is_empty());
 }
+
+/// Linux, no rule granting the 9008 device (Debian's ModemManager rule mentions 9008 but grants
+/// nothing): the access prompt comes before the tablet is sent into EDL, then the backup runs.
+#[test]
+fn backup_asks_for_usb_access_before_edl() {
+    let h = harness(stock_world());
+    h.host.set_needs_udev(true);
+    h.world.lock().faults.usb_denied = true;
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    let install = calls.iter().position(|c| *c == Call::UdevInstall).unwrap();
+    let reboot = calls.iter().position(is_reboot_edl_call).unwrap();
+    assert!(install < reboot, "{calls:?}");
+    assert_eq!(calls.iter().filter(|c| **c == Call::UdevInstall).count(), 1);
+}
+
+/// The check ahead of EDL passed, but once the tablet is in EDL this user can't open its node:
+/// asked then, before any edl call.
+#[test]
+fn backup_asks_for_usb_access_once_in_edl() {
+    let h = harness(stock_world());
+    h.world.lock().faults.usb_denied = true;
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    let install = calls.iter().position(|c| *c == Call::UdevInstall).unwrap();
+    let reboot = calls.iter().position(is_reboot_edl_call).unwrap();
+    let first_edl = calls.iter().position(is_edl_call).unwrap();
+    assert!(reboot < install && install < first_edl, "{calls:?}");
+}
+
+/// Both checks missed it and edl reports "Access denied (insufficient permissions)": that's a
+/// permission problem, not a lost tablet. Inkroot asks once, then reads again.
+#[test]
+fn backup_edl_permission_error_asks_then_reads_again() {
+    let h = harness(stock_world());
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_check_misses(2);
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    let reads_a = calls
+        .iter()
+        .filter(|c| matches!(c, Call::EdlRead { part } if part == "boot_a"))
+        .count();
+    // Denied, then read after access was granted (plus the verify read of the active slot,
+    // which is boot_b here).
+    assert_eq!(reads_a, 2, "{calls:?}");
+}
+
+/// The rule went in, but the device still can't be opened: a clear permission error with
+/// Try again, never "lost contact" or "didn't switch modes".
+#[test]
+fn backup_usb_access_still_missing_fails_clearly() {
+    let h = harness(stock_world());
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_install_ineffective(true);
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Failed, "{end:?}");
+    let e = end.error.unwrap();
+    assert_eq!(e.code, ErrorCode::UsbPermission);
+    assert_eq!(e.message, inkroot_lib::tools::USB_PERMISSION_MESSAGE);
+    assert_eq!(e.suggested_action, Some(SuggestedAction::Retry));
+    assert!(
+        !h.world
+            .calls()
+            .iter()
+            .any(|c| matches!(c, Call::EdlRead { .. }))
+    );
+}
+
+/// The same when edl reports the denial and granting access didn't help.
+#[test]
+fn backup_edl_permission_error_after_grant_fails_clearly() {
+    let h = harness(stock_world());
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_check_misses(2);
+    h.host.set_udev_install_ineffective(true);
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Failed, "{end:?}");
+    let e = end.error.unwrap();
+    assert_eq!(e.code, ErrorCode::UsbPermission);
+    assert!(!e.message.contains("lost contact"), "{e:?}");
+}
+
+#[test]
+fn backup_usb_access_declined_cancels() {
+    let h = harness(stock_world());
+    h.host.set_needs_udev(true);
+    let end = run_to_end(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        &[("installUdev", "cancel")],
+    );
+    assert_eq!(end.status, FlowStatus::Cancelled, "{end:?}");
+    assert!(!h.world.calls().iter().any(is_reboot_edl_call));
+}
+
+/// Losing the tablet mid-read is "lost contact", with the edlTimeout code.
+#[test]
+fn backup_read_lost_says_lost_contact() {
+    let h = harness(stock_world());
+    h.world.lock().faults.read_fails_on = Some("boot_a".into());
+    let end = run_backup(&h);
+    let e = end.error.unwrap();
+    assert_eq!(e.code, ErrorCode::EdlTimeout);
+    assert!(e.message.contains("lost contact"), "{e:?}");
+}

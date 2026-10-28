@@ -231,6 +231,9 @@ pub enum ErrorCode {
     VerifyFailed,
     ToolMissing,
     DriverMissing,
+    /// The computer won't let Inkroot open the tablet's rescue-mode USB device (Linux: no
+    /// udev rule granting this user access). Nothing was read or written.
+    UsbPermission,
     Busy,
     Internal,
 }

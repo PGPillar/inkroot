@@ -700,7 +700,55 @@ fn enter_edl_udev_prompt() {
         &[("installUdev", "install")],
     );
     assert_eq!(end.status, FlowStatus::Done);
-    assert!(h.world.calls().contains(&Call::UdevInstall));
+    // Asked ahead, while the tablet is still in Android, like the Windows driver.
+    let calls = h.world.calls();
+    let install = calls.iter().position(|c| *c == Call::UdevInstall).unwrap();
+    let reboot = calls.iter().position(support::is_reboot_edl_call).unwrap();
+    assert!(install < reboot, "{calls:?}");
+}
+
+#[test]
+fn enter_edl_udev_rechecks_until_access_arrives() {
+    // The rule is in but udev takes a moment to reach the device: Inkroot waits it out.
+    let h = harness(stock_world());
+    h.world.lock().mode = Mode::Edl;
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_settle_checks(3);
+    let end = run_flow_with(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        |ctx| {
+            ctx.step(StepId::EnterEdl, 1, 1);
+            enter_edl(ctx, Some(support::NOTE_MAX_SERIAL))?;
+            ok()
+        },
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    assert!(
+        h.clock.now() >= Duration::from_millis(1500),
+        "waited for udev"
+    );
+
+    // Never settling within UDEV_SETTLE: a clear permission error.
+    let h = harness(stock_world());
+    h.world.lock().mode = Mode::Edl;
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_settle_checks(1000);
+    let end = run_flow_with(
+        &h,
+        FlowKind::Backup,
+        FlowOptions::default(),
+        |ctx| {
+            ctx.step(StepId::EnterEdl, 1, 1);
+            enter_edl(ctx, Some(support::NOTE_MAX_SERIAL))?;
+            ok()
+        },
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Failed, "{end:?}");
+    assert_eq!(end.error.unwrap().code, ErrorCode::UsbPermission);
 }
 
 fn cable_flow(ctx: &FlowCtx) -> FlowOut {

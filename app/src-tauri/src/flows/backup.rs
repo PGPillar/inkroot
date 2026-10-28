@@ -2,7 +2,8 @@
 //! second read, decide stock, write a verified manifest. Root reuses `take_backup`.
 
 use super::common::{
-    best_effort_restart, check_device, enter_edl, magisk_stock_check, restart_from_edl, wait_boot,
+    best_effort_restart, check_device, enter_edl, magisk_stock_check, regain_usb_access,
+    restart_from_edl, wait_boot,
 };
 use super::{FlowCtx, FlowEnd};
 use crate::backup::{FirmwareInfo, Manifest, StockEvidence};
@@ -89,39 +90,51 @@ fn hash_failed(path: &Path, e: std::io::Error) -> FlowEnd {
 }
 
 /// Reads `part` into `out` over EDL. Any failure resets the tablet (best effort; nothing was
-/// written) and ends the flow calmly.
+/// written) and ends the flow calmly. If edl isn't allowed to open the device, asks for USB
+/// access once and reads again.
 fn read_part(ctx: &FlowCtx, part: &str, out: &Path, label: &str) -> Result<(), FlowEnd> {
-    if ctx.check_cancel().is_err() {
-        best_effort_reset(ctx);
-        return Err(FlowEnd::Cancelled);
-    }
-    ctx.info(&format!("Reading {part}"));
-    let r = ctx
-        .deps()
-        .edl
-        .read(part, out, ctx.cancel_token(), &|done, total| {
-            ctx.progress(done, total, label)
-        });
-    match r {
-        Ok(()) => Ok(()),
-        Err(e @ ToolError::Stalled { .. }) => {
-            // The tablet never answered: no reset (it wouldn't answer that either).
-            ctx.info(&format!("Reading {part} failed: {e}"));
-            let _ = std::fs::remove_file(out);
-            ctx.note_edl_unresponsive();
-            Err(FlowEnd::Failed(not_answering(format!(
-                "read {part}: {e:?}"
-            ))))
-        }
-        Err(e) => {
-            ctx.info(&format!("Reading {part} failed: {e}"));
-            let _ = std::fs::remove_file(out);
+    let mut asked_access = false;
+    loop {
+        if ctx.check_cancel().is_err() {
             best_effort_reset(ctx);
-            Err(match e {
-                ToolError::Cancelled => FlowEnd::Cancelled,
-                e => read_failed(&e, part),
-            })
+            return Err(FlowEnd::Cancelled);
         }
+        ctx.info(&format!("Reading {part}"));
+        let r = ctx
+            .deps()
+            .edl
+            .read(part, out, ctx.cancel_token(), &|done, total| {
+                ctx.progress(done, total, label)
+            });
+        return match r {
+            Ok(()) => Ok(()),
+            Err(e @ ToolError::Stalled { .. }) => {
+                // The tablet never answered: no reset (it wouldn't answer that either).
+                ctx.info(&format!("Reading {part} failed: {e}"));
+                let _ = std::fs::remove_file(out);
+                ctx.note_edl_unresponsive();
+                Err(FlowEnd::Failed(not_answering(format!(
+                    "read {part}: {e:?}"
+                ))))
+            }
+            Err(e @ ToolError::UsbPermission { .. }) => {
+                // Not a lost tablet: this computer won't let Inkroot open it. No reset here
+                // (edl can't open it for that either); the flow's end retries one.
+                ctx.info(&format!("Reading {part} failed: {e}"));
+                let _ = std::fs::remove_file(out);
+                regain_usb_access(ctx, &mut asked_access, format!("read {part}: {e:?}"))?;
+                continue;
+            }
+            Err(e) => {
+                ctx.info(&format!("Reading {part} failed: {e}"));
+                let _ = std::fs::remove_file(out);
+                best_effort_reset(ctx);
+                Err(match e {
+                    ToolError::Cancelled => FlowEnd::Cancelled,
+                    e => read_failed(&e, part),
+                })
+            }
+        };
     }
 }
 

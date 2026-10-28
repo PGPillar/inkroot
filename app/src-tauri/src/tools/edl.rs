@@ -91,6 +91,17 @@ pub fn edl_handshake_progress(line: &str) -> bool {
     .any(|m| l.contains(m))
 }
 
+/// True for an edl (pyusb/libusb) line saying this user may not open the USB device, e.g.
+/// `usb.core.USBError: [Errno 13] Access denied (insufficient permissions)` or
+/// `LIBUSB_ERROR_ACCESS`. A plain file "Permission denied" (errno 13 on a path) doesn't count.
+pub fn edl_usb_permission_denied(line: &str) -> bool {
+    let l = line.to_ascii_lowercase();
+    l.contains("insufficient permissions")
+        || l.contains("libusb_error_access")
+        || l.contains("access denied")
+        || (l.contains("usb") && (l.contains("errno 13") || l.contains("errno=13")))
+}
+
 pub fn parse_percent(line: &str) -> Option<f32> {
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| Regex::new(r"(\d{1,3}(?:\.\d+)?)\s*%").expect("valid regex"));
@@ -111,6 +122,9 @@ impl RealEdl {
             env: vec![],
         };
         let total = self.part_size;
+        // A line saying the USB device couldn't be opened for lack of permission: whatever
+        // edl does next (exit, or hang until the watchdog), that's the real problem.
+        let denied: std::cell::RefCell<Option<String>> = Default::default();
         // A tablet that doesn't answer the handshake leaves edl hanging in Sahara for good:
         // give up after `edl_handshake` rather than the whole read/write timeout.
         let watchdog = Watchdog {
@@ -125,12 +139,26 @@ impl RealEdl {
             &edl_log_keeps,
             Some(watchdog),
             &mut |line| {
+                if denied.borrow().is_none() && edl_usb_permission_denied(line) {
+                    *denied.borrow_mut() = Some(line.trim().to_string());
+                }
                 if let Some(pct) = parse_percent(line) {
                     let pct = pct.clamp(0.0, 100.0) as f64;
                     progress(((pct / 100.0) * total as f64) as u64, total);
                 }
             },
-        )?;
+        );
+        let denied = denied.into_inner();
+        let out = match (out, denied) {
+            (Ok(out), _) if out.code == 0 => return Ok(()),
+            (Ok(_) | Err(ToolError::Stalled { .. }), Some(detail)) => {
+                return Err(ToolError::UsbPermission {
+                    tool: "edl".into(),
+                    detail,
+                });
+            }
+            (out, _) => out?,
+        };
         if out.code != 0 {
             return Err(ToolError::Exit {
                 tool: "edl".into(),
@@ -371,6 +399,55 @@ mod tests {
             },
             part_size: 100,
         }
+    }
+
+    #[test]
+    fn usb_permission_lines() {
+        for l in [
+            "usb.core.USBError: [Errno 13] Access denied (insufficient permissions)",
+            "libusb: error [_get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/001/007, errno=13",
+            "LIBUSB_ERROR_ACCESS",
+            "main - Access denied (insufficient permissions)",
+        ] {
+            assert!(edl_usb_permission_denied(l), "{l}");
+        }
+        for l in [
+            "PermissionError: [Errno 13] Permission denied: '/home/a/boot_a.img'",
+            "main - Device detected :)",
+            "USB error: No such device",
+        ] {
+            assert!(!edl_usb_permission_denied(l), "{l}");
+        }
+    }
+
+    /// Debian report: no udev rule grants this user the 9008 node, so pyusb can't open it.
+    #[cfg(unix)]
+    #[test]
+    fn usb_permission_denied_is_its_own_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let edl = stuck_edl(
+            dir.path(),
+            "echo 'main - Waiting for the device'; echo 'usb.core.USBError: [Errno 13] Access denied (insufficient permissions)' >&2; exit 1",
+            std::time::Duration::from_secs(20),
+        );
+        let r = edl.read(
+            "boot_a",
+            &dir.path().join("o.img"),
+            &CancelToken::default(),
+            &|_, _| {},
+        );
+        assert!(
+            matches!(&r, Err(ToolError::UsbPermission { tool, detail }) if tool == "edl" && detail.contains("Access denied")),
+            "{r:?}"
+        );
+        // Denied, then hanging: still a permission problem, not a silent tablet.
+        let edl = stuck_edl(
+            dir.path(),
+            "echo 'LIBUSB_ERROR_ACCESS'; sleep 60",
+            std::time::Duration::from_millis(300),
+        );
+        let r = edl.reset_quick();
+        assert!(matches!(&r, Err(ToolError::UsbPermission { .. })), "{r:?}");
     }
 
     /// The Windows report: edl opens the device, then hangs in sahara.connect forever.

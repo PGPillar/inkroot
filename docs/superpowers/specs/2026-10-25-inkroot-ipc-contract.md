@@ -74,7 +74,12 @@ interface Prompt {
     | "chooseSlot"          // options: a | b
     | "keepWaitingOrRescue" // options: keepWaiting | goToRescue
     | "installDriver"       // Windows: options: install | cancel. Asked before `adb reboot edl` when Windows has never bound WinUSB to 05C6:9008, else once the 9008 device shows without WinUSB (a driverless one is found via SetupAPI)
-    | "installUdev"         // Linux:   options: install | cancel
+    | "installUdev"         // Linux:   options: install | cancel. Asked when this user can't open the 9008 device node
+                            // (checked with access(2) on /dev/bus/usb/BBB/DDD found via sysfs), or — before `adb reboot edl`
+                            // or the cable guide, with no 9008 device yet — when no udev rule grants 05c6:9008 access
+                            // (Inkroot's 51-inkroot-edl.rules, or a matching rule with uaccess / MODE / a GROUP the user is in;
+                            // ENV-only rules such as ModemManager's don't count). Also asked once when edl reports a USB
+                            // permission error, then the read/write is tried again. cancel ends the flow (cancelled).
     | "edlNotFound"         // options: retry | cancel. Non-blocking: shown once the 60 s wait for 9008 runs out
                             // (rescue: counted from the cableGuide answer; other flows: from `adb reboot edl`;
                             // before a write: at once). The backend keeps polling and carries on by itself
@@ -96,7 +101,12 @@ type ErrorCode =
   | "noDevice" | "unauthorized" | "unknownModel" | "unknownFirmware" | "lowBattery"
   | "alreadyRooted" | "notRooted" | "noStockBackup" | "badImage" | "notStock"
   | "edlTimeout" | "edlNotAnswering" | "hashMismatch" | "patchFailed" | "bootTimeout" | "verifyFailed"
-  | "toolMissing" | "driverMissing" | "busy" | "internal";
+  | "toolMissing" | "driverMissing" | "usbPermission" | "busy" | "internal";
+// usbPermission (Linux): the computer won't let Inkroot open the tablet's rescue-mode (9008) USB
+// device — no udev rule grants this user access, the password prompt was dismissed, or access is
+// still missing a few seconds after the rule was installed. Nothing was read or written.
+// suggestedAction: "retry". When edl itself reports the denial mid-flow, the flow first asks
+// installUdev once and tries again.
 // edlNotAnswering: the tablet is in EDL but edl got no handshake from it within ~20 s of starting
 // (only "Device detected :)", no "Protocol version"/"Mode detected"/loader/firehose line). edl is
 // killed; nothing was read or written, and no edl command (reset or write) follows. message: hold

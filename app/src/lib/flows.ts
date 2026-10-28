@@ -11,7 +11,7 @@ export const ALL_ERROR_CODES: ErrorCode[] = [
   'noDevice', 'unauthorized', 'unknownModel', 'unknownFirmware', 'lowBattery',
   'alreadyRooted', 'notRooted', 'noStockBackup', 'badImage', 'notStock',
   'edlTimeout', 'edlNotAnswering', 'hashMismatch', 'patchFailed', 'bootTimeout', 'verifyFailed',
-  'toolMissing', 'driverMissing', 'busy', 'internal',
+  'toolMissing', 'driverMissing', 'usbPermission', 'busy', 'internal',
 ];
 
 export const FLOW_KINDS: FlowKind[] = ['backup', 'importBackup', 'root', 'rescue', 'unroot', 'reinstallBootService'];

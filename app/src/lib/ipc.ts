@@ -90,7 +90,7 @@ export type ErrorCode =
   | 'noDevice' | 'unauthorized' | 'unknownModel' | 'unknownFirmware' | 'lowBattery'
   | 'alreadyRooted' | 'notRooted' | 'noStockBackup' | 'badImage' | 'notStock'
   | 'edlTimeout' | 'edlNotAnswering' | 'hashMismatch' | 'patchFailed' | 'bootTimeout' | 'verifyFailed'
-  | 'toolMissing' | 'driverMissing' | 'busy' | 'internal';
+  | 'toolMissing' | 'driverMissing' | 'usbPermission' | 'busy' | 'internal';
 
 export interface FlowError {
   code: ErrorCode;

@@ -30,6 +30,24 @@ pub enum ToolError {
     /// the tablet didn't answer the handshake.
     #[error("{tool} made no progress within {secs}s")]
     Stalled { tool: String, secs: u64 },
+    /// The tool found the USB device but this user isn't allowed to open it (Linux: no udev
+    /// rule granting access to the 9008 device). Nothing reached the tablet.
+    #[error("{tool} isn't allowed to open the USB device: {detail}")]
+    UsbPermission { tool: String, detail: String },
+}
+
+/// What Inkroot says when it still can't open the tablet in rescue mode (after asking for
+/// access, or when it can't ask).
+pub const USB_PERMISSION_MESSAGE: &str = "Inkroot doesn't have permission to talk to your tablet in rescue mode. Unplug the tablet, plug it back in, then try again. Nothing was changed on it.";
+
+/// The failure for a tablet in EDL that this computer won't let Inkroot open.
+pub fn usb_permission(detail: String) -> FlowError {
+    FlowError {
+        code: ErrorCode::UsbPermission,
+        message: USB_PERMISSION_MESSAGE.into(),
+        detail,
+        suggested_action: Some(SuggestedAction::Retry),
+    }
 }
 
 /// What Inkroot says when the tablet in EDL doesn't answer edl's handshake.
@@ -52,6 +70,9 @@ impl From<ToolError> for FlowError {
             && tool == "edl"
         {
             return not_answering(detail);
+        }
+        if let ToolError::UsbPermission { .. } = &e {
+            return usb_permission(detail);
         }
         let (code, message, suggested_action) = match &e {
             ToolError::Missing(_) => (
@@ -279,6 +300,13 @@ mod tests {
         });
         assert_eq!(e.code, ErrorCode::EdlNotAnswering);
         assert_eq!(e.message, NOT_ANSWERING_MESSAGE);
+        assert_eq!(e.suggested_action, Some(SuggestedAction::Retry));
+        let e = FlowError::from(ToolError::UsbPermission {
+            tool: "edl".into(),
+            detail: "Access denied (insufficient permissions)".into(),
+        });
+        assert_eq!(e.code, ErrorCode::UsbPermission);
+        assert_eq!(e.message, USB_PERMISSION_MESSAGE);
         assert_eq!(e.suggested_action, Some(SuggestedAction::Retry));
     }
 

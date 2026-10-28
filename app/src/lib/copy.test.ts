@@ -10,7 +10,7 @@ const stripTech = (o: unknown): unknown => JSON.parse(JSON.stringify(o, (k, v) =
 test('ALL_* lists match the contract unions', () => {
   expect(new Set(ALL_STEP_IDS).size).toBe(20);
   expect(ALL_PROMPT_KINDS).toHaveLength(12);
-  expect(ALL_ERROR_CODES).toHaveLength(20);
+  expect(ALL_ERROR_CODES).toHaveLength(21);
   expect(new Set([...Object.values(FLOW_STEPS).flat(), 'done'])).toEqual(new Set(ALL_STEP_IDS));
 });
 const pairs = FLOW_KINDS.flatMap((k) => FLOW_STEPS[k].map((s) => [k, s] as const));
@@ -32,6 +32,13 @@ test.each(ALL_PROMPT_KINDS)('prompt copy for %s labels every contract option', (
   expect(Object.keys(PROMPT_COPY[k].options).sort()).toEqual([...ids].sort());
 });
 test.each(ALL_ERROR_CODES)('error heading for %s', (c) => expect(ERROR_HEADINGS[c]).toBeTruthy());
+test('USB permission and lost-contact copy', () => {
+  expect(ERROR_HEADINGS.usbPermission).toBe('Inkroot needs permission to use USB');
+  expect(PROMPT_COPY.installUdev.heading).toBe('Inkroot needs permission to use USB');
+  expect(PROMPT_COPY.installUdev.body).toMatch(/password once/);
+  // edlTimeout means contact was lost mid-read, not that the tablet never switched modes.
+  expect(ERROR_HEADINGS.edlTimeout).toBe('Lost contact with your tablet');
+});
 test('stepLabel', () => {
   expect(stepLabel('root', 2, 4)).toBe('STEP 2 OF 4 · SAFETY COPY');
   expect(stepLabel('root', 9, 4)).toBe('STEP 9 OF 4');

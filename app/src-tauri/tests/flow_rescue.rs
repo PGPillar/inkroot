@@ -645,3 +645,58 @@ fn rescue_check_without_handshake_asks_and_never_resets() {
         1
     );
 }
+
+/// Linux: the tablet waits in EDL but this user can't open it. Inkroot asks for access before
+/// any edl call, then writes.
+#[test]
+fn rescue_asks_for_usb_access_before_writing() {
+    let h = harness(stock_world());
+    let seeded = seed_stock_backup(&h);
+    brick(&h);
+    h.world.lock().faults.usb_denied = true;
+    let end = rescue(
+        &h,
+        FlowOptions {
+            backup_id: Some(seeded.id.clone()),
+            ..FlowOptions::default()
+        },
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let calls = h.world.calls();
+    let install = calls.iter().position(|c| *c == Call::UdevInstall).unwrap();
+    let write = calls
+        .iter()
+        .position(|c| matches!(c, Call::EdlWrite { .. }))
+        .unwrap();
+    assert!(install < write, "{calls:?}");
+}
+
+/// The check missed it and `edl w` reports the permission error: nothing was written, so
+/// Inkroot asks for access once and writes again, without a write-mismatch prompt.
+#[test]
+fn rescue_write_permission_error_asks_then_writes_again() {
+    let h = harness(stock_world());
+    let seeded = seed_stock_backup(&h);
+    let stock_b = fake_boot_image(4096, 2);
+    brick(&h);
+    h.world.lock().faults.usb_denied = true;
+    h.host.set_udev_check_misses(1);
+    let end = rescue(
+        &h,
+        FlowOptions {
+            backup_id: Some(seeded.id.clone()),
+            ..FlowOptions::default()
+        },
+        &[("installUdev", "install")],
+    );
+    assert_eq!(end.status, FlowStatus::Done, "{end:?}");
+    let writes = h
+        .world
+        .calls()
+        .iter()
+        .filter(|c| matches!(c, Call::EdlWrite { .. }))
+        .count();
+    assert_eq!(writes, 2);
+    assert_eq!(h.world.lock().partitions["boot_b"], stock_b);
+}

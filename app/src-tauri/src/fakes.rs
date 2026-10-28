@@ -72,6 +72,9 @@ pub struct Faults {
     pub no_handshake: bool,
     /// Like `no_handshake`, but only from the first read after a write (the check).
     pub no_handshake_on_verify: bool,
+    /// Linux without a udev rule: this user can't open the 9008 device, so every edl call
+    /// fails with a permission error until `FakeHost::install_udev` clears it.
+    pub usb_denied: bool,
 }
 
 /// Real-time pauses the fake tools take, so demo mode feels like the real thing. All zero by
@@ -239,6 +242,13 @@ fn edl_stalled() -> ToolError {
     ToolError::Stalled {
         tool: "edl".into(),
         secs: 20,
+    }
+}
+
+fn edl_denied() -> ToolError {
+    ToolError::UsbPermission {
+        tool: "edl".into(),
+        detail: "usb.core.USBError: [Errno 13] Access denied (insufficient permissions)".into(),
     }
 }
 
@@ -572,6 +582,9 @@ impl Edl for FakeEdl {
             if w.faults.edl_never_appears {
                 return Err(edl_timeout());
             }
+            if w.faults.usb_denied {
+                return Err(edl_denied());
+            }
             let after_write = w.calls.iter().any(|c| matches!(c, Call::EdlWrite { .. }));
             if w.faults.no_handshake || (w.faults.no_handshake_on_verify && after_write) {
                 return Err(edl_stalled());
@@ -626,6 +639,9 @@ impl Edl for FakeEdl {
             if w.mode != Mode::Edl {
                 return Err(edl_err("no Qualcomm device in EDL mode"));
             }
+            if w.faults.usb_denied {
+                return Err(edl_denied());
+            }
             if w.faults.no_handshake {
                 return Err(edl_stalled());
             }
@@ -657,6 +673,9 @@ impl Edl for FakeEdl {
         }
         if w.mode != Mode::Edl {
             return Err(edl_err("no Qualcomm device in EDL mode"));
+        }
+        if w.faults.usb_denied {
+            return Err(edl_denied());
         }
         if w.faults.no_handshake {
             return Err(edl_stalled());
@@ -717,6 +736,13 @@ impl UsbProbe for FakeUsb {
     }
 }
 
+/// Counts `a` down by one; false once it is zero.
+fn take_one(a: &std::sync::atomic::AtomicU32) -> bool {
+    use std::sync::atomic::Ordering::SeqCst;
+    let n = a.load(SeqCst);
+    n > 0 && a.compare_exchange(n, n - 1, SeqCst, SeqCst).is_ok()
+}
+
 /// Fake host setup: records installs on the world's call log and clears the need.
 pub struct FakeHost {
     world: FakeWorld,
@@ -724,6 +750,15 @@ pub struct FakeHost {
     /// The driver is known to be missing before the tablet enters EDL (Windows pre-check).
     needs_driver_ahead: std::sync::atomic::AtomicBool,
     needs_udev: std::sync::atomic::AtomicBool,
+    /// `install_udev` succeeds but access stays denied (the rule never reaches the device).
+    udev_install_ineffective: std::sync::atomic::AtomicBool,
+    /// The next N `needs_udev` checks say "fine" whatever the truth (a check that missed the
+    /// problem, so edl itself reports it).
+    udev_check_misses: std::sync::atomic::AtomicU32,
+    /// After `install_udev`, this many checks still say "needed" (udev hasn't reached the
+    /// device yet); `udev_settle_left` counts them down.
+    udev_settle_checks: std::sync::atomic::AtomicU32,
+    udev_settle_left: std::sync::atomic::AtomicU32,
 }
 
 impl FakeHost {
@@ -733,6 +768,10 @@ impl FakeHost {
             needs_driver: Default::default(),
             needs_driver_ahead: Default::default(),
             needs_udev: Default::default(),
+            udev_install_ineffective: Default::default(),
+            udev_check_misses: Default::default(),
+            udev_settle_checks: Default::default(),
+            udev_settle_left: Default::default(),
         }
     }
     pub fn set_needs_driver(&self, v: bool) {
@@ -746,8 +785,22 @@ impl FakeHost {
             .store(v, std::sync::atomic::Ordering::SeqCst);
         self.set_needs_driver(v);
     }
+    /// As on a Linux PC with no rule granting the 9008 device: needed ahead of EDL, and
+    /// (with the world's `usb_denied` fault) while the tablet is in EDL.
     pub fn set_needs_udev(&self, v: bool) {
         self.needs_udev
+            .store(v, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn set_udev_check_misses(&self, n: u32) {
+        self.udev_check_misses
+            .store(n, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn set_udev_settle_checks(&self, n: u32) {
+        self.udev_settle_checks
+            .store(n, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn set_udev_install_ineffective(&self, v: bool) {
+        self.udev_install_ineffective
             .store(v, std::sync::atomic::Ordering::SeqCst);
     }
 }
@@ -765,12 +818,35 @@ impl crate::host::setup::HostSetup for FakeHost {
         self.set_needs_driver_ahead(false);
         Ok(())
     }
+    /// Like the Linux check: with the 9008 device present, whether it can't be opened.
     fn needs_udev(&self) -> bool {
-        self.needs_udev.load(std::sync::atomic::Ordering::SeqCst)
+        if take_one(&self.udev_check_misses) {
+            return false;
+        }
+        if take_one(&self.udev_settle_left) {
+            return true;
+        }
+        let w = self.world.lock();
+        let present = w.mode == Mode::Edl && !w.faults.edl_never_appears;
+        (present && w.faults.usb_denied)
+            || self.needs_udev.load(std::sync::atomic::Ordering::SeqCst)
     }
     fn install_udev(&self) -> Result<(), crate::ipc::FlowError> {
-        self.world.lock().calls.push(Call::UdevInstall);
-        self.set_needs_udev(false);
+        let mut w = self.world.lock();
+        w.calls.push(Call::UdevInstall);
+        self.udev_settle_left.store(
+            self.udev_settle_checks
+                .load(std::sync::atomic::Ordering::SeqCst),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        if !self
+            .udev_install_ineffective
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            w.faults.usb_denied = false;
+            drop(w);
+            self.set_needs_udev(false);
+        }
         Ok(())
     }
 }

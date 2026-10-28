@@ -152,6 +152,7 @@ fn enums_serialize_as_contract_literals() {
         (ErrorCode::VerifyFailed, "verifyFailed"),
         (ErrorCode::ToolMissing, "toolMissing"),
         (ErrorCode::DriverMissing, "driverMissing"),
+        (ErrorCode::UsbPermission, "usbPermission"),
         (ErrorCode::Busy, "busy"),
         (ErrorCode::Internal, "internal"),
     ]);
