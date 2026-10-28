@@ -431,6 +431,50 @@ const list: Scenario[] = [
   make('shot-rescue-cable', 'Screenshot: rescue, cable guide.', NONE, {
     frozen: { flow: frozenFlow({ kind: 'rescue', step: 'cableGuide', stepIndex: 2 }) },
   }),
+  // Screenshots of the cable-related prompts, frozen so their art can be looked at directly.
+  make('shot-rescue-edl-not-found', "Screenshot: rescue, the tablet isn't seen in rescue mode yet.", NONE, {
+    frozen: {
+      flow: frozenFlow({
+        kind: 'rescue', step: 'waitEdl', stepIndex: 2, status: 'waitingForUser',
+        prompt: {
+          id: 'shot-p', kind: 'edlNotFound',
+          options: [
+            { id: 'retry', label: 'Try again', emphasis: 'primary' },
+            { id: 'cancel', label: 'Cancel', emphasis: 'secondary' },
+          ],
+        },
+      }),
+    },
+  }),
+  make('shot-root-cable-check', 'Screenshot: root asks whether there is a rescue cable.', PLAIN, {
+    frozen: {
+      flow: frozenFlow({
+        step: 'cableCheck', stepIndex: 3, status: 'waitingForUser',
+        prompt: {
+          id: 'shot-p', kind: 'cableCheck',
+          options: [
+            { id: 'have', label: 'I have one', emphasis: 'primary' },
+            { id: 'whereToGet', label: 'Where do I get one?', emphasis: 'secondary' },
+            { id: 'continueWithout', label: 'Continue without one', emphasis: 'danger' },
+          ],
+        },
+      }),
+    },
+  }),
+  make('shot-root-retry-write', "Screenshot: root, the write didn't check out.", EDL, {
+    frozen: {
+      flow: frozenFlow({
+        step: 'verifyWrite', stepIndex: 3, status: 'waitingForUser',
+        prompt: {
+          id: 'shot-p', kind: 'retryWrite',
+          options: [
+            { id: 'retry', label: 'Try again', emphasis: 'primary' },
+            { id: 'cancel', label: 'Cancel', emphasis: 'secondary' },
+          ],
+        },
+      }),
+    },
+  }),
   make('shot-rescue-waiting', 'Layout: rescue, written and checked, waiting for the tablet, with a long log.', NONE, {
     frozen: {
       flow: frozenFlow({ kind: 'rescue', step: 'waitBoot', stepIndex: 4, status: 'waitingForUser', prompt: { id: 'shot-p', ...TABLET_STARTING } }),

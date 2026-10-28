@@ -1,44 +1,39 @@
 <script lang="ts">
   import DitherDefs from './DitherDefs.svelte';
 
-  type Part = 'port' | 'adapter';
-  type Variant = 'port' | 'adapterCrossed';
-  let {
-    width,
-    highlight,
-    variant = 'port',
-    title,
-  }: { width?: number; highlight?: Part; variant?: Variant; title: string } = $props();
+  let { width = 480, title }: { width?: number; title: string } = $props();
 
-  // The side of a closed laptop with its ports. adapterCrossed plugs a USB-C→A dongle into its
-  // USB-C port and strikes the dongle out.
+  // Left: the cable's USB-A plug (the website cable's shell, tongue and grip) pushed into a USB-A
+  // port on the computer itself. Right: a USB-C→A adapter, struck out. Same units,
+  // centre line and mono labels as DeepFlashCable; the frame starts at y=41, as nothing sits above the cable.
   const uid = $props.id();
-  const pid = `${uid}-dither`;
-  const vbH = $derived(variant === 'adapterCrossed' ? 140 : 112);
-  const w = $derived(width ?? 200);
-  const fill = (part: Part) => (highlight === part ? `url(#${pid})` : 'none');
+  const d50 = `${uid}-d50`;
+  const d25 = `${uid}-d25`;
 </script>
 
-<svg role="img" aria-label={title} viewBox="0 0 200 {vbH}" width={w} height={(w * vbH) / 200}
-  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
-  <DitherDefs id={pid} />
-  <path data-part="lid" d="M12 24h176l4 4v2l-4 4H12l-4-4v-2z" />
-  <path data-part="base" d="M12 38h176l4 4v40l-4 4H12l-4-4V42zM16 86v4h10v-4M174 86v4h10v-4" />
-  <rect data-part="port" x="28" y="52" width="44" height="20" fill={fill('port')} />
-  <rect data-part="tongue" x="34" y="56" width="32" height="6" fill="currentColor" />
-  <path data-part="usbC" d="M92 58h18l3 3v2l-3 3H92l-3-3v-2z" />
-  <circle data-part="jack" cx="132" cy="62" r="5" />
-  <path data-part="vents" d="M150 56v12M158 56v12M166 56v12M174 56v12" />
-  {#if highlight === 'port'}<path data-part="emphasis" d="M50 96v6M38 95l-4 4M62 95l4 4" />{/if}
-  {#if variant === 'adapterCrossed'}
-    <!-- A USB-C→A dongle plugged into the laptop's own USB-C port, hanging below it, struck out. -->
-    <g data-part="adapter">
-      <path d="M86 54h30v16H86z" style="fill: var(--panel)" />
-      <path d="M95 58v8M101 58v8M107 58v8M101 70v42h23" />
-      <path d="M124 98h44l4 4v20l-4 4h-44z" fill={fill('adapter')} />
-      <rect x="132" y="104" width="32" height="16" style="fill: var(--panel)" />
-      <rect x="137" y="108" width="22" height="4" fill="currentColor" stroke="none" />
-    </g>
-    <path data-part="cross" d="M94 90l24 24M94 114l24-24" stroke-width="4" />
-  {/if}
+<svg role="img" aria-label={title} viewBox="0 41 480 135" {width} height={(width * 135) / 480}
+  fill="none" stroke="currentColor" stroke-width="2" shape-rendering="crispEdges">
+  <DitherDefs id={d50} />
+  <defs>
+    <pattern id={d25} width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="2" height="2" fill="currentColor" stroke="none" />
+    </pattern>
+  </defs>
+  <rect data-part="computer" x="9" y="49" width="130" height="78" fill="url(#{d25})" />
+  <rect data-part="port" x="99" y="65" width="40" height="46" style="fill: var(--panel)" />
+  <rect data-part="usbA" x="109" y="69" width="50" height="38" style="fill: var(--panel)" />
+  <rect data-part="usbATongue" x="117" y="81" width="34" height="8" fill="currentColor" />
+  <rect data-part="usbAGrip" x="159" y="61" width="52" height="54" fill="url(#{d50})" />
+  <path data-part="cable" d="M211 88H247" />
+  <rect data-part="adapterUsbC" x="325" y="76" width="44" height="24" />
+  <rect data-part="adapterUsbCTongue" x="333" y="85" width="28" height="6" fill="currentColor" />
+  <rect data-part="adapter" x="369" y="61" width="52" height="54" fill="url(#{d50})" />
+  <rect data-part="adapterUsbA" x="421" y="69" width="50" height="38" />
+  <rect data-part="adapterUsbATongue" x="429" y="81" width="34" height="8" fill="currentColor" />
+  <path data-part="cross" d="M323 51l146 74M323 125l146-74" stroke-width="4" shape-rendering="auto" />
+  <g data-part="labels" fill="currentColor" stroke="none" font-size="13" letter-spacing="1.5"
+    style="font-family: var(--font-mono, monospace)" shape-rendering="auto">
+    <text x="9" y="148">USB-A PORT</text><text x="9" y="166">ON THE COMPUTER</text>
+    <text x="471" y="148" text-anchor="end">NO ADAPTER</text><text x="471" y="166" text-anchor="end">NO HUB</text>
+  </g>
 </svg>

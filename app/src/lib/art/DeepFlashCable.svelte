@@ -1,30 +1,63 @@
 <script lang="ts">
   import DitherDefs from './DitherDefs.svelte';
 
-  type Part = 'button' | 'usbA' | 'usbC';
-  let { width = 280, highlight, title }: { width?: number; highlight?: Part; title: string } = $props();
+  type Cue = 'hold' | 'none';
+  let {
+    width = 480,
+    cue = 'hold',
+    labels = true,
+    tabletLabel = false,
+    title,
+  }: {
+    width?: number;
+    /** hold: the website's down arrow and HOLD over the button. */
+    cue?: Cue;
+    labels?: boolean;
+    /** Label the right-hand end TABLET (a scene draws the tablet there) instead of USB-C → TABLET. */
+    tabletLabel?: boolean;
+    title: string;
+  } = $props();
 
-  // USB-A plug → cable → inline box with a round button → cable → USB-C plug. Centre line y=54.
+  // The website's cable drawing (site/rescue/index.html), shape for shape: USB-A shell with its
+  // tongue, a 50% dithered grip, straight cable, a 25% dithered button box with a solid button,
+  // straight cable, a 50% dithered grip, a short USB-C shell. Centre line y=88.
   const uid = $props.id();
-  const pid = `${uid}-dither`;
-  const fill = (part: Part) => (highlight === part ? `url(#${pid})` : 'none');
-  const EMPHASIS: Record<Part, string> = {
-    usbA: 'M25 34v-6M13 35l-4-4M37 35l4-4',
-    button: 'M146 26v-6M132 28l-4-4M160 28l4-4',
-    usbC: 'M259 40v-6M249 41l-4-4M269 41l4-4',
-  };
+  const d50 = `${uid}-d50`;
+  const d25 = `${uid}-d25`;
 </script>
 
-<svg role="img" aria-label={title} viewBox="0 0 280 96" {width} height={(width * 96) / 280}
-  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
-  <DitherDefs id={pid} />
-  <rect data-part="usbA" x="8" y="42" width="34" height="24" fill={fill('usbA')} />
-  <path data-part="usbAHoles" d="M16 49h6v5h-6zM28 49h6v5h-6z" style="fill: var(--panel)" />
-  <path data-part="usbABody" d="M42 38h32l4 4v24l-4 4H42zM54 47v14M60 47v14M66 47v14" />
-  <path data-part="cable" d="M78 46l12 3v10l-12 3M90 54h28M174 54a40 40 0 0 0 32 0M206 49l10-3v16l-10-3" />
-  <path data-part="box" d="M118 34h56v40h-56z" />
-  <circle data-part="button" cx="146" cy="54" r="11" fill={fill('button')} />
-  <path data-part="usbCBody" d="M216 42h28l4 4v16l-4 4h-28z" />
-  <path data-part="usbC" d="M248 48h18l4 4v4l-4 4h-18z" fill={fill('usbC')} />
-  {#if highlight}<path data-part="emphasis" d={EMPHASIS[highlight]} />{/if}
+<svg role="img" aria-label={title} viewBox="0 0 480 176" {width} height={(width * 176) / 480}
+  fill="none" stroke="currentColor" stroke-width="2"
+  shape-rendering="crispEdges">
+  <DitherDefs id={d50} />
+  <defs>
+    <pattern id={d25} width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="2" height="2" fill="currentColor" stroke="none" />
+    </pattern>
+  </defs>
+  <rect data-part="usbA" x="9" y="69" width="50" height="38" />
+  <rect data-part="usbATongue" x="17" y="81" width="34" height="8" fill="currentColor" />
+  <rect data-part="usbAGrip" x="59" y="61" width="52" height="54" fill="url(#{d50})" />
+  <path data-part="cable" d="M111 88H189M291 88H371" />
+  <rect data-part="box" x="189" y="61" width="102" height="54" fill="url(#{d25})" />
+  <rect data-part="button" x="219" y="73" width="42" height="30" fill="currentColor" />
+  <rect data-part="usbCGrip" x="371" y="65" width="46" height="46" fill="url(#{d50})" />
+  <rect data-part="usbC" x="417" y="76" width="44" height="24" />
+  <rect data-part="usbCTongue" x="425" y="85" width="28" height="6" fill="currentColor" />
+  {#if cue === 'hold'}
+    <path data-part="holdArrow" d="M240 13V53M231 44l9 9 9-9" />
+  {/if}
+  {#if labels || cue === 'hold'}
+    <g data-part="labels" fill="currentColor" stroke="none" font-size="13" letter-spacing="1.5"
+      style="font-family: var(--font-mono, monospace)" shape-rendering="auto">
+      {#if cue === 'hold'}<text x="256" y="30">HOLD</text>{/if}
+      {#if labels}
+        <text x="9" y="148">USB-A</text><text x="9" y="166">→ COMPUTER</text>
+        <text x="240" y="148" text-anchor="middle">BUTTON</text>
+        {#if !tabletLabel}
+          <text x="471" y="148" text-anchor="end">USB-C</text><text x="471" y="166" text-anchor="end">→ TABLET</text>
+        {/if}
+      {/if}
+    </g>
+  {/if}
 </svg>

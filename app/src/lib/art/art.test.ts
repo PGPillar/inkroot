@@ -2,7 +2,7 @@ import { render } from '@testing-library/svelte';
 import type { Component } from 'svelte';
 import { describe, expect, test } from 'vitest';
 import * as art from './index';
-import { DeepFlashCable, DitherDefs, Hand, Tablet } from './index';
+import { DeepFlashCable, DitherDefs, Tablet } from './index';
 
 // Every illustration exported from index.ts; DitherDefs is a <pattern> helper, not art.
 const ALL_ART = Object.entries(art).filter(([name]) => name !== 'DitherDefs') as [
@@ -13,9 +13,9 @@ const ALL_ART = Object.entries(art).filter(([name]) => name !== 'DitherDefs') as
 const patternIdOf = (svg: Element) => svg.querySelector('pattern')!.getAttribute('id')!;
 
 describe('illustrations', () => {
-  test('index exports all six illustrations plus DitherDefs', () => {
+  test('index exports all five illustrations plus DitherDefs', () => {
     expect(ALL_ART.map(([n]) => n).sort()).toEqual(
-      ['DeepFlashCable', 'Hand', 'MenuSketch', 'PressIndicator', 'Tablet', 'UsbAPort'],
+      ['DeepFlashCable', 'MenuSketch', 'PressIndicator', 'Tablet', 'UsbAPort'],
     );
     expect(DitherDefs).toBeDefined();
   });
@@ -50,19 +50,22 @@ describe('illustrations', () => {
     expect(b.querySelector('[data-part=screen]')).toHaveAttribute('fill', `url(#${idB})`);
   });
 
-  test('highlight applies dither fill', () => {
-    const svg = render(DeepFlashCable, { title: 'cable', highlight: 'button' }).container.querySelector('svg')!;
-    const fill = svg.querySelector('[data-part=button]')!.getAttribute('fill');
-    expect(fill).toMatch(/^url\(#.+\)$/);
-    expect(fill).toBe(`url(#${patternIdOf(svg)})`);
-    expect(svg.querySelector('[data-part=usbA]')).toHaveAttribute('fill', 'none');
+  test('DeepFlashCable draws the website cable: dithered grips and box, solid button, HOLD cue', () => {
+    const svg = render(DeepFlashCable, { title: 'cable' }).container.querySelector('svg')!;
+    const ids = [...svg.querySelectorAll('pattern')].map((p) => p.getAttribute('id'));
+    expect(new Set(ids).size).toBe(2);
+    for (const part of ['usbAGrip', 'box', 'usbCGrip']) {
+      expect(ids.map((id) => `url(#${id})`)).toContain(svg.querySelector(`[data-part=${part}]`)!.getAttribute('fill'));
+    }
+    expect(svg.querySelector('[data-part=button]')).toHaveAttribute('fill', 'currentColor');
+    expect(svg.querySelector('[data-part=holdArrow]')).not.toBeNull();
+    expect(svg.textContent).toMatch(/HOLD.*USB-A.*COMPUTER.*BUTTON.*USB-C.*TABLET/s);
   });
 
-  test.each(['press', 'hold'] as const)('Hand %s has an opaque panel knockout so it can overlay art', (pose) => {
-    const svg = render(Hand, { title: 'hand', pose }).container.querySelector('svg')!;
-    const knockout = svg.querySelector('[data-part=silhouette]')!;
-    expect(knockout.getAttribute('style')).toMatch(/fill:\s*var\(--panel\)/);
-    expect(svg.firstElementChild!.nextElementSibling).toBe(knockout); // painted first, under the outline
+  test('DeepFlashCable without cue or labels draws only the cable', () => {
+    const svg = render(DeepFlashCable, { title: 'cable', cue: 'none', labels: false }).container.querySelector('svg')!;
+    expect(svg.querySelector('[data-part=holdArrow]')).toBeNull();
+    expect(svg.querySelector('text')).toBeNull();
   });
 
   test('DitherDefs draws a two-square checkerboard of the given cell', () => {

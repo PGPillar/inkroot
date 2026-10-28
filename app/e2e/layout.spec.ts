@@ -26,6 +26,10 @@ const cases = [
   ['shot-rescue-back', 'Your tablet is back ✓'],
   ['shot-rescue-not-seen', 'Written and checked ✓'],
   ['shot-rescue-back-in-edl', 'Your tablet went back to rescue mode'],
+  ['shot-rescue-cable', 'You need a deep-flash cable'],
+  ['shot-rescue-edl-not-found', "We can't see your tablet yet"],
+  ['shot-root-cable-check', 'Do you have a rescue cable?'],
+  ['shot-root-retry-write', "That write didn't check out"],
 ] as const;
 
 for (const [scenario, heading] of cases) {

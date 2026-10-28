@@ -565,33 +565,33 @@ export const CABLE_GUIDE: CableStep[] = [
   {
     id: 'c1', heading: 'You need a deep-flash cable',
     body: 'It\'s a USB cable with a small button on it. Search for "Qualcomm deep flash cable" or "EDL cable". They cost a few dollars. A normal USB cable won\'t work.',
-    art: 'DeepFlashCable, button highlighted', primary: 'I have one', secondary: 'Copy search terms',
+    art: 'DeepFlashCable (website drawing, HOLD arrow)', primary: 'I have one', secondary: 'Copy search terms',
   },
   {
     id: 'c2', heading: 'Use a real USB-A port',
     body: "Plug the cable's big end into a USB-A port on the computer itself. USB-C adapters and hubs often don't work.",
     note: 'No USB-A port? Borrow a computer that has one, like a desktop or an older laptop, and run Inkroot there. There are versions for Windows and Linux.',
-    art: 'UsbAPort + crossed-out adapter', next: 'Next',
+    art: 'USB-A plug in the computer + crossed-out adapter', next: 'Next',
   },
   {
     id: 'c3', heading: "Hold the cable's button",
     body: "Press the small button on the cable and keep holding it. Don't let go yet.",
-    art: 'Hand + PressIndicator on cable', next: 'Next',
+    art: 'Finger on the cable button', next: 'Next',
   },
   {
     id: 'c4', heading: 'Plug it into your tablet',
     body: 'Still holding the button, plug the cable into your tablet.',
-    art: 'Tablet + cable', next: 'Next',
+    art: 'Finger on the button, cable plugged into the tablet', next: 'Next',
   },
   {
     id: 'c5', heading: 'Hold the power button for 15 seconds',
     body: "Keep holding both buttons for about 15 seconds. The screen might not change. E-ink keeps showing the last thing it displayed, and that's normal.",
-    art: 'Tablet power button + PressIndicator', secondary: 'Start a 15 s timer', next: 'Next',
+    art: 'Fingers on the cable button and the power key', secondary: 'Start a 15 s timer', next: 'Next',
   },
   {
     id: 'c6', heading: 'Keep holding the cable button 10 more seconds',
     body: "Let go of the power button. Keep holding the cable button for about 10 more seconds. Let go of the button and don't touch it again until Inkroot says it's done — pressing it during the transfer interrupts the connection.",
-    art: 'Hand on cable', secondary: 'Start a 10 s timer',
+    art: 'Finger on the cable button, tablet plugged in', secondary: 'Start a 10 s timer',
   },
 ];
 

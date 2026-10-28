@@ -22,8 +22,6 @@
   const flowId = app.flow!.flowId;
 
   const SCENE: Record<string, CableSceneId> = { c1: 'cable', c2: 'port', c3: 'press', c4: 'plug', c5: 'power', c6: 'hold' };
-  /** Drawn height of each scene, so every panel's art reads at about the same size. */
-  const HEIGHT: Record<CableSceneId, number> = { cable: 150, port: 196, press: 236, plug: 224, power: 236, hold: 220 };
   const TIMER: Record<string, number> = { c5: 15, c6: 10 };
   /** "Hold the cable's button": where the sequence starts again after the tablet wasn't found. */
   const HOLD_PANEL = 2;
@@ -94,7 +92,7 @@
   <RefreshTransition key={panel}>
     <StepFrame {label} heading={step.heading} body={step.body}>
       {#snippet art()}
-        <CableScene scene={SCENE[step.id]} height={HEIGHT[SCENE[step.id]]} {seconds} title={step.heading} />
+        <CableScene scene={SCENE[step.id]} {seconds} title={step.heading} />
       {/snippet}
 
       {#if step.note}

@@ -84,11 +84,11 @@
     <StepFrame label={copy.label} heading={copy.heading} body={body || undefined}>
       {#snippet art()}
         {#if prompt.kind === 'retryWrite'}
-          <DeepFlashCable highlight="usbC" title={copy.heading} />
+          <DeepFlashCable cue="none" title={copy.heading} />
         {:else if prompt.kind === 'edlNotFound' && kind === 'rescue'}
-          <UsbAPort variant="adapterCrossed" highlight="port" width={210} title={copy.bullets?.[1] ?? copy.heading} />
+          <UsbAPort title={copy.bullets?.[1] ?? copy.heading} />
         {:else if prompt.kind === 'cableCheck'}
-          <DeepFlashCable highlight="button" width={360} title={copy.heading} />
+          <DeepFlashCable title={copy.heading} />
         {:else if prompt.kind === 'keepWaitingOrRescue'}
           <Tablet screen="logo" width={124} title={copy.heading} />
         {:else if prompt.kind === 'connectionLostAfterWrite'}
