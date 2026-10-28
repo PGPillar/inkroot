@@ -96,12 +96,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/setup-python@v5
+      # macOS: no setup-python. Its Python is a framework build, whose Python.framework (and symlinks)
+      # PyInstaller copies into the onedir and Tauri flattens into copies that fail notarization. There,
+      # edl is built with uv-managed python-build-standalone (libpython3.12.dylib); build_edl.py enforces it.
+      - if: runner.os != 'macOS'
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.13'
+      - if: runner.os == 'macOS'
+        run: uv python install 3.12
       # Builds the onedir and runs its self-test ("libusb OK …") and `edl --help`.
-      - run: python -I tools/build_edl.py --target ${{ matrix.target }}
+      - run: |
+          if [ "$RUNNER_OS" = macOS ]; then PY="$(uv python find --managed-python 3.12)"; else PY=python; fi
+          "$PY" -I tools/build_edl.py --target ${{ matrix.target }}
       # Artifacts drop exec bits and symlinks, so the onedir travels as a tar.
       - name: Pack edl build
         run: tar -C tools/.build -cf tools/.build/edl-${{ matrix.target }}.tar ${{ matrix.target }}

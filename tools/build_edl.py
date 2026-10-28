@@ -109,6 +109,25 @@ def build_manifest(onedir, commit, target):
     return m
 
 
+def check_no_framework(onedir):
+    """macOS: fail if the onedir has any *.framework or symlink. Tauri copies resources dereferencing
+    symlinks, so a framework would ship as loose copies whose signatures Apple rejects at notarization."""
+    bad = []
+    for dirpath, dirnames, filenames in os.walk(onedir):
+        for name in dirnames + filenames:
+            p = Path(dirpath) / name
+            rel = p.relative_to(onedir).as_posix()
+            if p.is_symlink():
+                bad.append(f"symlink {rel} -> {os.readlink(p)}")
+            elif name.endswith(".framework"):
+                bad.append(f"framework {rel}")
+    if bad:
+        raise BuildError("macOS edl onedir must contain no *.framework and no symlinks (they break the signature "
+                         "of the notarized .app); build with a uv-managed non-framework Python. Found:\n  "
+                         + "\n  ".join(sorted(bad)))
+    print("macOS onedir check OK (no .framework, no symlinks)")
+
+
 def clean_env():
     """Environment for running the frozen edl: no Python paths leaking in from the build."""
     return {k: v for k, v in os.environ.items()
@@ -142,8 +161,19 @@ def main(argv=None):
         raise BuildError(f"lock edl.buildDir must be tools/.build/{{target}}/edl (PyInstaller --distpath), got {edl['buildDir']}")
 
     checkout(edl)
-    run(["uv", "sync", "--frozen", "--no-dev", "--python", edl["python"]], cwd=SRC)
+    darwin = args.target.startswith("darwin")
+    # On macOS only a uv-managed (python-build-standalone, non-framework) Python will do: a framework
+    # Python (python.org, actions/setup-python, Homebrew) puts Python.framework and its symlinks in the
+    # onedir, which Tauri's bundler flattens into copies Apple rejects at notarization ("signature invalid").
+    run(["uv", "sync", "--frozen", "--no-dev", "--python", edl["python"],
+         *(["--managed-python"] if darwin else [])], cwd=SRC)
     py = venv_python()
+    if darwin:
+        fw = run([py, "-I", "-c", "import sysconfig; print(sysconfig.get_config_var('PYTHONFRAMEWORK') or '')"],
+                 capture=True).strip()
+        if fw:
+            raise BuildError(f"build venv uses a framework Python ({fw}.framework); delete {SRC / '.venv'} and "
+                             "rebuild with a uv-managed Python (uv python install " + edl["python"] + ")")
     run(["uv", "pip", "install", "--python", py, "--require-hashes", "-r", EDL_TOOLS / "requirements-build.txt"])
 
     manifest_path.unlink(missing_ok=True)
@@ -156,6 +186,8 @@ def main(argv=None):
     exe = onedir / ("edl.exe" if args.target.startswith("windows") else "edl")
     if not exe.is_file():
         raise BuildError(f"PyInstaller did not produce {exe}")
+    if darwin:
+        check_no_framework(onedir)
     smoke_test(exe)
 
     m = build_manifest(onedir, edl["commit"], args.target)
