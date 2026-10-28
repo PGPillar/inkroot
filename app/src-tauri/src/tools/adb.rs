@@ -127,7 +127,14 @@ impl RealAdb {
 
 impl Adb for RealAdb {
     fn devices(&self) -> Result<Vec<AdbDevice>, ToolError> {
-        let out = self.exec(None, &["devices"], self.timeouts.adb_shell)?;
+        // Polled every few seconds while waiting for the tablet: its raw output ("List of
+        // devices attached" …) never goes to the log; callers log state changes instead.
+        let out = self.exec_to(
+            &LogStore::discard(),
+            None,
+            &["devices"],
+            self.timeouts.adb_shell,
+        )?;
         Ok(parse_devices(&out.stdout))
     }
 
@@ -210,5 +217,44 @@ mod tests {
             ["-s", "S", "shell", "id"]
         );
         assert_eq!(adb_args(None, &["devices"]), ["devices"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn devices_output_stays_out_of_the_log() {
+        use crate::clock::FakeClock;
+        use crate::events::Emitter;
+        use crate::ipc::{DeviceStatus, FlowState, LogLine, Progress};
+        use std::os::unix::fs::PermissionsExt;
+        struct Null;
+        impl Emitter for Null {
+            fn device(&self, _: &DeviceStatus) {}
+            fn flow_state(&self, _: &FlowState) {}
+            fn progress(&self, _: &Progress) {}
+            fn log(&self, _: &LogLine) {}
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("adb");
+        std::fs::write(
+            &path,
+            "#!/bin/sh\nprintf 'List of devices attached\\nABC\\tdevice\\n\\n'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let log = Arc::new(LogStore::new(
+            Arc::new(Null),
+            Arc::new(FakeClock::new(chrono::Local::now())),
+        ));
+        let adb = RealAdb {
+            path,
+            log: log.clone(),
+            timeouts: Timeouts::default(),
+        };
+        for _ in 0..3 {
+            let d = adb.devices().unwrap();
+            assert_eq!(d.len(), 1);
+            assert_eq!(d[0].state, AdbState::Device);
+        }
+        assert_eq!(log.text(None), "");
     }
 }

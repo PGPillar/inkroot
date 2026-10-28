@@ -94,6 +94,19 @@ pub fn run(
     log: &LogStore,
     on_line: &mut dyn FnMut(&str),
 ) -> Result<CmdOutput, ToolError> {
+    run_filtered(spec, timeout, cancel, log, &|_| true, on_line)
+}
+
+/// Like `run`, but only lines for which `keep` returns true reach the log. Every line still
+/// reaches `on_line` and the returned output.
+pub fn run_filtered(
+    spec: &CmdSpec,
+    timeout: Duration,
+    cancel: Option<&CancelToken>,
+    log: &LogStore,
+    keep: &dyn Fn(&str) -> bool,
+    on_line: &mut dyn FnMut(&str),
+) -> Result<CmdOutput, ToolError> {
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
         .stdin(Stdio::null())
@@ -135,7 +148,9 @@ pub fn run(
     let mut stderr = String::new();
     let mut handle = |item: (LogStream, String), on_line: &mut dyn FnMut(&str)| {
         let (stream, line) = item;
-        log.line(stream, &line);
+        if keep(&line) {
+            log.line(stream, &line);
+        }
         on_line(&line);
         let buf = if stream == LogStream::Stderr {
             &mut stderr
@@ -276,6 +291,26 @@ mod tests {
             assert!(seen.iter().any(|l| l == want), "missing {want}: {seen:?}");
         }
         assert!(out.stdout.contains("one") && out.stderr.contains("two"));
+    }
+
+    #[test]
+    fn filtered_lines_skip_the_log_only() {
+        let log = store();
+        let mut seen = Vec::new();
+        let out = run_filtered(
+            &sh("echo keep; echo noise; echo also"),
+            Duration::from_secs(10),
+            None,
+            &log,
+            &|l| l != "noise",
+            &mut |l| seen.push(l.to_string()),
+        )
+        .unwrap();
+        let text = log.text(None);
+        assert!(text.contains("keep") && text.contains("also"), "{text}");
+        assert!(!text.contains("noise"), "{text}");
+        assert!(seen.iter().any(|l| l == "noise"));
+        assert!(out.stdout.contains("noise"));
     }
 
     #[test]
