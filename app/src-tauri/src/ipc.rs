@@ -216,6 +216,9 @@ pub enum ErrorCode {
     BadImage,
     NotStock,
     EdlTimeout,
+    /// The tablet is in EDL but didn't answer edl's handshake (wedged, or its hello was lost).
+    /// Nothing was read or written, and Inkroot sends it no further edl command.
+    EdlNotAnswering,
     HashMismatch,
     PatchFailed,
     BootTimeout,

@@ -1,6 +1,6 @@
 //! Real Qualcomm `edl` runner. Every call has a timeout; timeout/cancel kill the process tree.
 
-use super::process::{CancelToken, CmdSpec, run_filtered};
+use super::process::{CancelToken, CmdSpec, Watchdog, run_watched};
 use super::{Timeouts, ToolError};
 use crate::logs::LogStore;
 use regex::Regex;
@@ -71,6 +71,26 @@ pub fn edl_log_keeps(line: &str) -> bool {
     )
 }
 
+/// True for an edl line showing the tablet answered edl's handshake: the Sahara hello
+/// ("Protocol version"), a detected mode, the loader upload, or anything from the firehose
+/// stage. "Device detected :)" only means the USB device could be opened; a tablet that is
+/// wedged (or whose hello was lost) stops right there.
+pub fn edl_handshake_progress(line: &str) -> bool {
+    let l = line.to_ascii_lowercase();
+    // The loader's own path may contain "firehose".
+    if l.contains("using loader") {
+        return false;
+    }
+    [
+        "protocol version",
+        "mode detected",
+        "loader successfully uploaded",
+        "firehose",
+    ]
+    .iter()
+    .any(|m| l.contains(m))
+}
+
 pub fn parse_percent(line: &str) -> Option<f32> {
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| Regex::new(r"(\d{1,3}(?:\.\d+)?)\s*%").expect("valid regex"));
@@ -91,12 +111,19 @@ impl RealEdl {
             env: vec![],
         };
         let total = self.part_size;
-        let out = run_filtered(
+        // A tablet that doesn't answer the handshake leaves edl hanging in Sahara for good:
+        // give up after `edl_handshake` rather than the whole read/write timeout.
+        let watchdog = Watchdog {
+            within: self.timeouts.edl_handshake,
+            progressed: &edl_handshake_progress,
+        };
+        let out = run_watched(
             &spec,
             timeout,
             cancel,
             &self.log,
             &edl_log_keeps,
+            Some(watchdog),
             &mut |line| {
                 if let Some(pct) = parse_percent(line) {
                     let pct = pct.clamp(0.0, 100.0) as f64;
@@ -288,6 +315,109 @@ mod tests {
         assert!(!edl_log_keeps("Keystone library is missing (optional).\r"));
         assert!(edl_log_keeps("main - Using loader /L/x.bin ..."));
         assert!(edl_log_keeps("Progress: |██| 45.2% Read"));
+    }
+
+    #[test]
+    fn handshake_progress_lines() {
+        // bkerler/edl 3.62 output up to and past the handshake.
+        for l in [
+            "main - Mode detected: sahara",
+            "main - Mode detected: firehose",
+            "sahara - Protocol version: 2, Version supported: 1",
+            "sahara - Loader successfully uploaded.",
+            "main - Trying to connect to firehose loader ...",
+            "firehose - INFO: Binary build date: Nov 15 2019",
+        ] {
+            assert!(edl_handshake_progress(l), "{l}");
+        }
+        for l in [
+            "main - Using loader /L/qualcomm/x_fhprg.bin ...",
+            "main - Using loader C:\\Inkroot\\loaders\\prog_firehose_ddr.elf ...",
+            "main - Waiting for the device",
+            "main - Device detected :)",
+            "Capstone library is missing (optional).",
+            "....",
+            "Device is in Sahara error state, please reboot the device.",
+            "",
+        ] {
+            assert!(!edl_handshake_progress(l), "{l}");
+        }
+    }
+
+    #[cfg(unix)]
+    fn stuck_edl(dir: &Path, script: &str, handshake: std::time::Duration) -> RealEdl {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join("edl");
+        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        struct Null;
+        impl crate::events::Emitter for Null {
+            fn device(&self, _: &crate::ipc::DeviceStatus) {}
+            fn flow_state(&self, _: &crate::ipc::FlowState) {}
+            fn progress(&self, _: &crate::ipc::Progress) {}
+            fn log(&self, _: &crate::ipc::LogLine) {}
+        }
+        let log = LogStore::new(
+            Arc::new(Null),
+            Arc::new(crate::clock::FakeClock::new(chrono::Local::now())),
+        );
+        RealEdl {
+            path,
+            loader: dir.join("prog_firehose.bin"),
+            log: Arc::new(log),
+            timeouts: Timeouts {
+                edl_handshake: handshake,
+                ..Timeouts::default()
+            },
+            part_size: 100,
+        }
+    }
+
+    /// The Windows report: edl opens the device, then hangs in sahara.connect forever.
+    #[cfg(unix)]
+    #[test]
+    fn stuck_handshake_is_given_up_quickly() {
+        let dir = tempfile::tempdir().unwrap();
+        let edl = stuck_edl(
+            dir.path(),
+            "echo 'main - Using loader x_firehose.bin ...'; echo 'main - Waiting for the device'; echo 'main - Device detected :)'; sleep 60",
+            std::time::Duration::from_millis(500),
+        );
+        let t = std::time::Instant::now();
+        let r = edl.read(
+            "boot_a",
+            &dir.path().join("o.img"),
+            &CancelToken::default(),
+            &|_, _| {},
+        );
+        assert!(
+            matches!(&r, Err(ToolError::Stalled { tool, .. }) if tool == "edl"),
+            "{r:?}"
+        );
+        assert!(t.elapsed() < std::time::Duration::from_secs(5));
+        let r = edl.write("boot_a", &dir.path().join("o.img"), &|_, _| {});
+        assert!(matches!(r, Err(ToolError::Stalled { .. })), "{r:?}");
+        let r = edl.reset_quick();
+        assert!(matches!(r, Err(ToolError::Stalled { .. })), "{r:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn answered_handshake_keeps_running() {
+        let dir = tempfile::tempdir().unwrap();
+        let edl = stuck_edl(
+            dir.path(),
+            "echo 'main - Device detected :)'; echo 'main - Mode detected: sahara'; sleep 3; echo 'Progress: 100%'",
+            // Generous: only the handshake line must arrive in time, not the whole run.
+            std::time::Duration::from_millis(1500),
+        );
+        let r = edl.read(
+            "boot_a",
+            &dir.path().join("o.img"),
+            &CancelToken::default(),
+            &|_, _| {},
+        );
+        assert!(r.is_ok(), "{r:?}");
     }
 
     #[test]

@@ -144,6 +144,7 @@ fn enums_serialize_as_contract_literals() {
         (ErrorCode::BadImage, "badImage"),
         (ErrorCode::NotStock, "notStock"),
         (ErrorCode::EdlTimeout, "edlTimeout"),
+        (ErrorCode::EdlNotAnswering, "edlNotAnswering"),
         (ErrorCode::HashMismatch, "hashMismatch"),
         (ErrorCode::PatchFailed, "patchFailed"),
         (ErrorCode::BootTimeout, "bootTimeout"),

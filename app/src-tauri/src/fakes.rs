@@ -67,6 +67,11 @@ pub struct Faults {
     /// Every `edl reset` hangs until its timeout (the tablet doesn't answer) and the tablet
     /// stays in EDL.
     pub reset_hangs: bool,
+    /// The tablet is in EDL but never answers the handshake: every edl call stalls ("Device
+    /// detected :)" and nothing after) until the watchdog gives up.
+    pub no_handshake: bool,
+    /// Like `no_handshake`, but only from the first read after a write (the check).
+    pub no_handshake_on_verify: bool,
 }
 
 /// Real-time pauses the fake tools take, so demo mode feels like the real thing. All zero by
@@ -227,6 +232,13 @@ fn edl_err(msg: &str) -> ToolError {
         tool: "edl".into(),
         code: 1,
         stderr: msg.into(),
+    }
+}
+
+fn edl_stalled() -> ToolError {
+    ToolError::Stalled {
+        tool: "edl".into(),
+        secs: 20,
     }
 }
 
@@ -560,9 +572,11 @@ impl Edl for FakeEdl {
             if w.faults.edl_never_appears {
                 return Err(edl_timeout());
             }
-            if w.faults.vanish_on_verify_read
-                && w.calls.iter().any(|c| matches!(c, Call::EdlWrite { .. }))
-            {
+            let after_write = w.calls.iter().any(|c| matches!(c, Call::EdlWrite { .. }));
+            if w.faults.no_handshake || (w.faults.no_handshake_on_verify && after_write) {
+                return Err(edl_stalled());
+            }
+            if w.faults.vanish_on_verify_read && after_write {
                 w.faults.vanish_on_verify_read = false;
                 w.mode = Mode::Off;
                 // The user will power-cycle the tablet by hand: it starts on its own.
@@ -612,6 +626,9 @@ impl Edl for FakeEdl {
             if w.mode != Mode::Edl {
                 return Err(edl_err("no Qualcomm device in EDL mode"));
             }
+            if w.faults.no_handshake {
+                return Err(edl_stalled());
+            }
             if w.faults.write_errors > 0 {
                 w.faults.write_errors -= 1;
                 return Err(edl_timeout());
@@ -640,6 +657,9 @@ impl Edl for FakeEdl {
         }
         if w.mode != Mode::Edl {
             return Err(edl_err("no Qualcomm device in EDL mode"));
+        }
+        if w.faults.no_handshake {
+            return Err(edl_stalled());
         }
         if w.faults.reset_hangs {
             return Err(edl_timeout());

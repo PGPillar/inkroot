@@ -11,7 +11,7 @@ use crate::ipc::{
     BackupFile, BackupSource, DeviceInfo, ErrorCode, FlowError, FlowResult, StepId, SuggestedAction,
 };
 use crate::profile::DeviceProfile;
-use crate::tools::ToolError;
+use crate::tools::{ToolError, not_answering};
 use std::path::{Path, PathBuf};
 
 pub const READ_FAILED_MESSAGE: &str = "Inkroot lost contact with your tablet while saving its safety copy. Nothing was changed on it.";
@@ -104,6 +104,15 @@ fn read_part(ctx: &FlowCtx, part: &str, out: &Path, label: &str) -> Result<(), F
         });
     match r {
         Ok(()) => Ok(()),
+        Err(e @ ToolError::Stalled { .. }) => {
+            // The tablet never answered: no reset (it wouldn't answer that either).
+            ctx.info(&format!("Reading {part} failed: {e}"));
+            let _ = std::fs::remove_file(out);
+            ctx.note_edl_unresponsive();
+            Err(FlowEnd::Failed(not_answering(format!(
+                "read {part}: {e:?}"
+            ))))
+        }
         Err(e) => {
             ctx.info(&format!("Reading {part} failed: {e}"));
             let _ = std::fs::remove_file(out);

@@ -220,6 +220,20 @@ describe('flow screen', () => {
     expect(heading('Pick a job.')).toBeVisible();
   });
 
+  test('a tablet that is not answering says to hold power, then try again', async () => {
+    const x = await setup('backup-edl-not-answering');
+    await x.app.startJob('backup');
+    await until(hasHeading("Your tablet isn't answering"), 'not answering');
+    expect(
+      screen.getByText(
+        "Hold the tablet's power button for up to 30 seconds to restart it, wait for its home screen, then try again. Your screen may still show the last thing it displayed — that's normal.",
+      ),
+    ).toBeVisible();
+    const start = vi.spyOn(x.app, 'startJob');
+    await click('Try again');
+    expect(start).toHaveBeenCalledWith('backup', {});
+  });
+
   test('failure for a tablet found in rescue mode goes to Rescue', async () => {
     const x = await setup('ready');
     x.emit.state!({

@@ -410,6 +410,7 @@ export const ERROR_HEADINGS: Record<ErrorCode, string> = {
   badImage: "That file can't be used",
   notStock: "That copy isn't original",
   edlTimeout: "Your tablet didn't switch modes",
+  edlNotAnswering: "Your tablet isn't answering",
   hashMismatch: "That write didn't check out",
   patchFailed: "Preparing root didn't work",
   bootTimeout: "Your tablet hasn't restarted yet",

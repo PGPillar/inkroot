@@ -87,8 +87,13 @@ interface Prompt {
 type ErrorCode =
   | "noDevice" | "unauthorized" | "unknownModel" | "unknownFirmware" | "lowBattery"
   | "alreadyRooted" | "notRooted" | "noStockBackup" | "badImage" | "notStock"
-  | "edlTimeout" | "hashMismatch" | "patchFailed" | "bootTimeout" | "verifyFailed"
+  | "edlTimeout" | "edlNotAnswering" | "hashMismatch" | "patchFailed" | "bootTimeout" | "verifyFailed"
   | "toolMissing" | "driverMissing" | "busy" | "internal";
+// edlNotAnswering: the tablet is in EDL but edl got no handshake from it within ~20 s of starting
+// (only "Device detected :)", no "Protocol version"/"Mode detected"/loader/firehose line). edl is
+// killed; nothing was read or written, and no edl command (reset or write) follows. message: hold
+// the power button up to 30 s, wait for the home screen, try again. suggestedAction: "retry".
+// If it happens on the check after a write, the flow asks connectionLostAfterWrite instead.
 
 interface FlowError {
   code: ErrorCode;

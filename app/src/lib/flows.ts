@@ -10,7 +10,7 @@ export const ALL_STEP_IDS: StepId[] = [
 export const ALL_ERROR_CODES: ErrorCode[] = [
   'noDevice', 'unauthorized', 'unknownModel', 'unknownFirmware', 'lowBattery',
   'alreadyRooted', 'notRooted', 'noStockBackup', 'badImage', 'notStock',
-  'edlTimeout', 'hashMismatch', 'patchFailed', 'bootTimeout', 'verifyFailed',
+  'edlTimeout', 'edlNotAnswering', 'hashMismatch', 'patchFailed', 'bootTimeout', 'verifyFailed',
   'toolMissing', 'driverMissing', 'busy', 'internal',
 ];
 

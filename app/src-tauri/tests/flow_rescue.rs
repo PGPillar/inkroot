@@ -523,3 +523,61 @@ fn rescue_connection_lost_restarted_ok_skips_reset_and_watches_for_tablet() {
         Some(RescueOutcome::TabletBack)
     );
 }
+
+#[test]
+fn rescue_no_handshake_fails_not_answering_without_writing_or_resetting() {
+    let h = harness(stock_world());
+    let seeded = seed_stock_backup(&h);
+    brick(&h);
+    h.world.lock().faults.no_handshake = true;
+    let end = rescue(
+        &h,
+        FlowOptions {
+            backup_id: Some(seeded.id.clone()),
+            ..FlowOptions::default()
+        },
+        &[],
+    );
+    let e = expect_failed(&end);
+    assert_eq!(e.code, ErrorCode::EdlNotAnswering, "{e:?}");
+    assert_eq!(resets(&h), 0);
+    let calls = h.world.calls();
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|c| matches!(c, Call::EdlWrite { .. }))
+            .count(),
+        1,
+        "one write attempt, never retried: {calls:?}"
+    );
+    assert!(!calls.iter().any(|c| matches!(c, Call::EdlRead { .. })));
+    // The stalled write never reached the tablet.
+    assert_eq!(h.world.lock().partitions["boot_b"], vec![0u8; 4096]);
+}
+
+#[test]
+fn rescue_check_without_handshake_asks_and_never_resets() {
+    let h = harness(stock_world());
+    let seeded = seed_stock_backup(&h);
+    brick(&h);
+    h.world.lock().faults.no_handshake_on_verify = true;
+    let end = rescue(
+        &h,
+        FlowOptions {
+            backup_id: Some(seeded.id.clone()),
+            ..FlowOptions::default()
+        },
+        &[("connectionLostAfterWrite", "runAgain")],
+    );
+    let e = expect_failed(&end);
+    assert_eq!(e.code, ErrorCode::HashMismatch, "{e:?}");
+    assert_eq!(resets(&h), 0);
+    assert_eq!(
+        h.world
+            .calls()
+            .iter()
+            .filter(|c| matches!(c, Call::EdlWrite { .. }))
+            .count(),
+        1
+    );
+}

@@ -172,6 +172,27 @@ pub fn run_filtered(
     keep: &dyn Fn(&str) -> bool,
     on_line: &mut dyn FnMut(&str),
 ) -> Result<CmdOutput, ToolError> {
+    run_watched(spec, timeout, cancel, log, keep, None, on_line)
+}
+
+/// Gives up on a tool that hasn't shown it is getting anywhere: if no output line passes
+/// `progressed` within `within` of the start, the tool is killed and the run fails with
+/// `ToolError::Stalled`. Once a line passes, the watchdog is off.
+pub struct Watchdog<'a> {
+    pub within: Duration,
+    pub progressed: &'a dyn Fn(&str) -> bool,
+}
+
+/// `run_filtered` with an optional `Watchdog`.
+pub fn run_watched(
+    spec: &CmdSpec,
+    timeout: Duration,
+    cancel: Option<&CancelToken>,
+    log: &LogStore,
+    keep: &dyn Fn(&str) -> bool,
+    watchdog: Option<Watchdog<'_>>,
+    on_line: &mut dyn FnMut(&str),
+) -> Result<CmdOutput, ToolError> {
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
         .envs(spec.env.iter().map(|(k, v)| (k, v)))
@@ -218,10 +239,14 @@ pub fn run_filtered(
 
     let mut stdout = String::new();
     let mut stderr = String::new();
+    let progressed = std::cell::Cell::new(watchdog.is_none());
     let mut handle = |item: (LogStream, String), on_line: &mut dyn FnMut(&str)| {
         let (stream, line) = item;
         if keep(&line) {
             log.line(stream, &line);
+        }
+        if !progressed.get() && watchdog.as_ref().is_some_and(|w| (w.progressed)(&line)) {
+            progressed.set(true);
         }
         on_line(&line);
         let buf = if stream == LogStream::Stderr {
@@ -255,6 +280,15 @@ pub fn run_filtered(
             break Err(ToolError::Timeout {
                 tool: tool_name(spec),
                 secs: timeout.as_secs(),
+            });
+        }
+        if let Some(w) = watchdog.as_ref().filter(|_| !progressed.get())
+            && start.elapsed() >= w.within
+        {
+            kill(&mut child);
+            break Err(ToolError::Stalled {
+                tool: tool_name(spec),
+                secs: w.within.as_secs(),
             });
         }
         match rx.recv_timeout(Duration::from_millis(50)) {
@@ -441,6 +475,53 @@ mod tests {
             &mut |_| {},
         );
         assert!(matches!(r, Err(ToolError::Cancelled)), "{r:?}");
+    }
+
+    fn ready(l: &str) -> bool {
+        l.contains("ready")
+    }
+
+    #[test]
+    fn watchdog_kills_a_tool_that_never_progresses() {
+        let t = std::time::Instant::now();
+        let mut seen = Vec::new();
+        let r = run_watched(
+            &sh("echo 'Device detected :)'; sleep 30"),
+            Duration::from_secs(20),
+            None,
+            &store(),
+            &|_| true,
+            Some(Watchdog {
+                within: Duration::from_millis(400),
+                progressed: &ready,
+            }),
+            &mut |l| seen.push(l.to_string()),
+        );
+        assert!(
+            matches!(&r, Err(ToolError::Stalled { tool, .. }) if tool == "sh"),
+            "{r:?}"
+        );
+        assert!(t.elapsed() < Duration::from_secs(4), "{:?}", t.elapsed());
+        assert_eq!(seen, ["Device detected :)"]);
+    }
+
+    #[test]
+    fn watchdog_off_once_the_tool_progresses() {
+        let out = run_watched(
+            &sh("echo ready; sleep 1; echo done"),
+            Duration::from_secs(20),
+            None,
+            &store(),
+            &|_| true,
+            Some(Watchdog {
+                within: Duration::from_millis(400),
+                progressed: &ready,
+            }),
+            &mut |_| {},
+        )
+        .unwrap();
+        assert_eq!(out.code, 0);
+        assert!(out.stdout.contains("done"));
     }
 
     #[test]

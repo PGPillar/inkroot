@@ -9,10 +9,10 @@ use crate::ipc::{
     SuggestedAction,
 };
 use crate::profile::{DeviceProfile, MIN_BATTERY};
-use crate::tools::ToolError;
 use crate::tools::adb::{AdbState, RebootTarget};
 use crate::tools::process::CancelToken;
 use crate::tools::usb::EdlUsbInfo;
+use crate::tools::{ToolError, not_answering};
 use std::path::Path;
 use std::time::Duration;
 
@@ -339,23 +339,34 @@ pub fn write_and_verify(
             ctx.note_write_attempted();
             ctx.info(&format!("Writing {part}"));
             let outcome = (|| -> Result<Outcome, String> {
-                d.edl
-                    .write(part, img, &|done, total| {
-                        ctx.progress(done, total, "Writing")
-                    })
-                    .map_err(|e| format!("write {part}: {e}"))?;
+                match d.edl.write(part, img, &|done, total| {
+                    ctx.progress(done, total, "Writing")
+                }) {
+                    Ok(()) => {}
+                    // No handshake, so nothing reached the tablet.
+                    Err(e @ ToolError::Stalled { .. }) => {
+                        return Ok(Outcome::NotAnswering(format!("write {part}: {e:?}")));
+                    }
+                    Err(e) => return Err(format!("write {part}: {e}")),
+                }
                 // 4. Read back. Cancel is rejected while writing, so a fresh token. If the
                 // connection drops mid-check, wait for the tablet to reappear and check again.
                 ctx.sub_step(StepId::VerifyWrite);
                 let mut attempts = 0;
                 loop {
                     attempts += 1;
-                    let read = d
-                        .edl
-                        .read(part, &verify, &CancelToken::default(), &|done, total| {
-                            ctx.progress(done, total, "Checking")
-                        })
-                        .map_err(|e| format!("read back {part}: {e}"));
+                    let read =
+                        d.edl
+                            .read(part, &verify, &CancelToken::default(), &|done, total| {
+                                ctx.progress(done, total, "Checking")
+                            });
+                    if let Err(e @ ToolError::Stalled { .. }) = &read {
+                        // Written, but the tablet stopped answering before the check: as
+                        // with a lost connection, never reset; ask.
+                        ctx.note_edl_unresponsive();
+                        return Ok(Outcome::Lost(format!("read back {part}: {e:?}")));
+                    }
+                    let read = read.map_err(|e| format!("read back {part}: {e}"));
                     match read {
                         Ok(()) => {
                             let got =
@@ -387,6 +398,10 @@ pub fn write_and_verify(
             ctx.set_writing(false);
             let _ = std::fs::remove_file(&verify);
             match outcome {
+                Ok(Outcome::NotAnswering(detail)) => {
+                    ctx.note_edl_unresponsive();
+                    return Err(FlowEnd::Failed(not_answering(detail)));
+                }
                 Ok(Outcome::Lost(detail)) => {
                     // The write finished but the check never could: don't reset, ask.
                     return match ctx.ask(PromptKind::ConnectionLostAfterWrite) {
@@ -442,8 +457,11 @@ enum Outcome {
     Match {
         reconnected: bool,
     },
-    /// The write finished, but the 9008 device vanished and never came back.
+    /// The write finished, but the 9008 device vanished and never came back (or stopped
+    /// answering).
     Lost(String),
+    /// edl never got past the handshake for the write: nothing was written.
+    NotAnswering(String),
 }
 
 /// A read-back error that looks like the USB connection went away (and the device is gone).
@@ -512,6 +530,11 @@ fn reset_attempts(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
                 "Trying the restart again (attempt {attempt} of {RESET_ATTEMPTS})"
             ));
         }
+        // A tablet that didn't answer edl's handshake gets no restart command: only a
+        // restart by hand (the power button) gets it out.
+        if ctx.edl_unresponsive() {
+            return edl_left(ctx, cancellable);
+        }
         let r = if cancellable {
             d.edl.reset()
         } else {
@@ -519,6 +542,10 @@ fn reset_attempts(ctx: &FlowCtx, cancellable: bool) -> Result<bool, FlowEnd> {
         };
         if let Err(e) = r {
             ctx.info(&format!("The restart command reported a problem: {e}"));
+            if let ToolError::Stalled { .. } = e {
+                ctx.note_edl_unresponsive();
+                return edl_left(ctx, cancellable);
+            }
             if !cancellable && matches!(e, ToolError::Timeout { .. }) {
                 return Ok(d.usb.edl_device().is_none());
             }
@@ -560,6 +587,9 @@ pub fn restart_from_edl(ctx: &FlowCtx) -> Result<(), FlowEnd> {
 /// Best-effort restart out of EDL on a failure path (nothing written, or a verified copy
 /// already saved): retries like `restart_from_edl` but never asks and ignores cancel.
 pub fn best_effort_restart(ctx: &FlowCtx) {
+    if ctx.edl_unresponsive() {
+        return;
+    }
     ctx.note_edl_reset();
     match reset_attempts(ctx, false) {
         Ok(true) => {}

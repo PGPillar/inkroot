@@ -481,3 +481,28 @@ fn backup_cancel_mid_read_ends_and_logs_cancel_once() {
             .is_some_and(|s| s.status == FlowStatus::Cancelled)
     );
 }
+
+#[test]
+fn backup_no_handshake_fails_not_answering_and_sends_nothing_else() {
+    let h = harness(stock_world());
+    h.world.lock().faults.no_handshake = true;
+    let end = run_backup(&h);
+    let e = expect_failed(&end);
+    assert_eq!(e.code, ErrorCode::EdlNotAnswering);
+    assert_eq!(e.message, inkroot_lib::tools::NOT_ANSWERING_MESSAGE);
+    assert_eq!(e.suggested_action, Some(SuggestedAction::Retry));
+    let calls = h.world.calls();
+    // One read attempt, then nothing: no reset (from the read failure or the end-of-flow
+    // release) and no write.
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|c| matches!(c, Call::EdlRead { .. }))
+            .count(),
+        1,
+        "{calls:?}"
+    );
+    assert!(!calls.contains(&Call::EdlReset), "{calls:?}");
+    assert!(!calls.iter().any(|c| matches!(c, Call::EdlWrite { .. })));
+    assert!(manifest_files(&h).is_empty());
+}

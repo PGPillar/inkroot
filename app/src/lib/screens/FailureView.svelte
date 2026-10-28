@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Tablet } from '../art';
+  import { PressIndicator, Tablet } from '../art';
   import Button from '../components/Button.svelte';
   import DitherIcon from '../components/DitherIcon.svelte';
   import StepFrame from '../components/StepFrame.svelte';
@@ -54,7 +54,12 @@
   {#snippet art()}
     <div class="art">
       <Tablet screen="blank" width={120} title={heading} />
-      <DitherIcon name="warning" size={56} />
+      {#if error?.code === 'edlNotAnswering'}
+        <!-- The fix is a long press on the power button. -->
+        <PressIndicator width={96} seconds={30} title={heading} />
+      {:else}
+        <DitherIcon name="warning" size={56} />
+      {/if}
     </div>
   {/snippet}
 

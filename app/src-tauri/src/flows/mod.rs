@@ -467,6 +467,7 @@ fn run_flow(
         opts,
         edl_entered: AtomicBool::new(false),
         write_attempted: AtomicBool::new(false),
+        edl_unresponsive: AtomicBool::new(false),
     };
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| flow(&ctx)))
         .unwrap_or_else(|p| {
@@ -498,6 +499,8 @@ pub struct FlowCtx {
     edl_entered: AtomicBool,
     /// A partition write was started at some point in this flow.
     write_attempted: AtomicBool,
+    /// edl gave up on the tablet's handshake: no further edl command is sent to it.
+    edl_unresponsive: AtomicBool,
 }
 
 impl FlowCtx {
@@ -693,11 +696,28 @@ impl FlowCtx {
         self.write_attempted.load(Ordering::SeqCst)
     }
 
+    /// Records that the tablet didn't answer edl's handshake. From then on the flow sends it
+    /// no edl command at all (no reset, no write): the user restarts it by hand.
+    pub fn note_edl_unresponsive(&self) {
+        if !self.edl_unresponsive.swap(true, Ordering::SeqCst) {
+            self.info(
+                "The tablet isn't answering in rescue mode; Inkroot won't send it anything else",
+            );
+        }
+    }
+
+    pub fn edl_unresponsive(&self) -> bool {
+        self.edl_unresponsive.load(Ordering::SeqCst)
+    }
+
     /// After a failed or cancelled flow: if this flow sent the tablet into EDL, nothing was
     /// ever written, and the tablet is still there, restart it (best effort). Never after a
     /// write was attempted; never for a tablet the flow didn't send into EDL (Rescue).
     fn release_edl_if_untouched(&self) {
-        if !self.edl_entered.load(Ordering::SeqCst) || self.write_attempted() {
+        if !self.edl_entered.load(Ordering::SeqCst)
+            || self.write_attempted()
+            || self.edl_unresponsive()
+        {
             return;
         }
         let d = self.deps();

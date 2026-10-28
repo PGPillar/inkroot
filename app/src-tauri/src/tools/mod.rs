@@ -26,11 +26,33 @@ pub enum ToolError {
     },
     #[error("cancelled")]
     Cancelled,
+    /// The tool never got past its start-up within `secs` (see `process::Watchdog`); for edl:
+    /// the tablet didn't answer the handshake.
+    #[error("{tool} made no progress within {secs}s")]
+    Stalled { tool: String, secs: u64 },
+}
+
+/// What Inkroot says when the tablet in EDL doesn't answer edl's handshake.
+pub const NOT_ANSWERING_MESSAGE: &str = "Hold the tablet's power button for up to 30 seconds to restart it, wait for its home screen, then try again. Your screen may still show the last thing it displayed — that's normal.";
+
+/// The failure for a tablet in EDL that doesn't answer. Nothing was read from or written to it.
+pub fn not_answering(detail: String) -> FlowError {
+    FlowError {
+        code: ErrorCode::EdlNotAnswering,
+        message: NOT_ANSWERING_MESSAGE.into(),
+        detail,
+        suggested_action: Some(SuggestedAction::Retry),
+    }
 }
 
 impl From<ToolError> for FlowError {
     fn from(e: ToolError) -> FlowError {
         let detail = format!("{e:?}");
+        if let ToolError::Stalled { tool, .. } = &e
+            && tool == "edl"
+        {
+            return not_answering(detail);
+        }
         let (code, message, suggested_action) = match &e {
             ToolError::Missing(_) => (
                 ErrorCode::ToolMissing,
@@ -67,6 +89,8 @@ pub struct Timeouts {
     pub edl_reset: Duration,
     /// `edl reset` on the best-effort paths (after a failure or cancel).
     pub edl_reset_quick: Duration,
+    /// How long edl may take, from start, to show the tablet answered its handshake.
+    pub edl_handshake: Duration,
     pub wait_edl: Duration,
     pub wait_boot: Duration,
     pub wait_bootsvc: Duration,
@@ -85,6 +109,7 @@ impl Default for Timeouts {
             edl_write: Duration::from_secs(900),
             edl_reset: Duration::from_secs(60),
             edl_reset_quick: Duration::from_secs(15),
+            edl_handshake: Duration::from_secs(20),
             wait_edl: Duration::from_secs(60),
             wait_boot: Duration::from_secs(180),
             wait_bootsvc: Duration::from_secs(90),
@@ -248,6 +273,13 @@ mod tests {
             secs: 5,
         });
         assert_eq!(e.code, ErrorCode::Internal);
+        let e = FlowError::from(ToolError::Stalled {
+            tool: "edl".into(),
+            secs: 20,
+        });
+        assert_eq!(e.code, ErrorCode::EdlNotAnswering);
+        assert_eq!(e.message, NOT_ANSWERING_MESSAGE);
+        assert_eq!(e.suggested_action, Some(SuggestedAction::Retry));
     }
 
     #[test]

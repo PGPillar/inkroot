@@ -88,7 +88,7 @@ export interface Prompt {
 export type ErrorCode =
   | 'noDevice' | 'unauthorized' | 'unknownModel' | 'unknownFirmware' | 'lowBattery'
   | 'alreadyRooted' | 'notRooted' | 'noStockBackup' | 'badImage' | 'notStock'
-  | 'edlTimeout' | 'hashMismatch' | 'patchFailed' | 'bootTimeout' | 'verifyFailed'
+  | 'edlTimeout' | 'edlNotAnswering' | 'hashMismatch' | 'patchFailed' | 'bootTimeout' | 'verifyFailed'
   | 'toolMissing' | 'driverMissing' | 'busy' | 'internal';
 
 export interface FlowError {

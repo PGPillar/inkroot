@@ -306,6 +306,23 @@ const list: Scenario[] = [
       ],
     },
   }),
+  make('backup-edl-not-answering', "Backup: the tablet is in rescue mode but doesn't answer.", PLAIN, {
+    flows: {
+      ...happyFlows(true),
+      backup: [
+        ...checkDevice(1), step('enterEdl', 2), log('adb reboot edl'), { wait: 900 }, { device: NONE }, { wait: 900 },
+        step('readPartitions', 3), log('main - Device detected :)'), { wait: 3000 },
+        {
+          fail: {
+            code: 'edlNotAnswering',
+            message: "Hold the tablet's power button for up to 30 seconds to restart it, wait for its home screen, then try again. Your screen may still show the last thing it displayed — that's normal.",
+            detail: 'read boot_a: Stalled { tool: "edl", secs: 20 }',
+            suggestedAction: 'retry',
+          },
+        },
+      ],
+    },
+  }),
   make('import-not-stock', 'Import: the file is not the original software.', PLAIN, {
     flows: {
       ...happyFlows(true),

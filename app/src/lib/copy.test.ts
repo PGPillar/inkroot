@@ -10,7 +10,7 @@ const stripTech = (o: unknown): unknown => JSON.parse(JSON.stringify(o, (k, v) =
 test('ALL_* lists match the contract unions', () => {
   expect(new Set(ALL_STEP_IDS).size).toBe(20);
   expect(ALL_PROMPT_KINDS).toHaveLength(11);
-  expect(ALL_ERROR_CODES).toHaveLength(19);
+  expect(ALL_ERROR_CODES).toHaveLength(20);
   expect(new Set([...Object.values(FLOW_STEPS).flat(), 'done'])).toEqual(new Set(ALL_STEP_IDS));
 });
 const pairs = FLOW_KINDS.flatMap((k) => FLOW_STEPS[k].map((s) => [k, s] as const));
