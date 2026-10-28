@@ -374,8 +374,13 @@ jobs:
           grep -q "source=Notarized Developer ID" spctl-app.log
 
           echo "== stapled ticket (app)"
-          xcrun stapler validate "$APP" 2>&1 | tee stapler-app.log
-          grep -q "The validate action worked!" stapler-app.log
+          # `stapler validate` asks Apple's CloudKit, which sometimes drops the connection; retry.
+          for attempt in 1 2 3 4 5; do
+            xcrun stapler validate "$APP" 2>&1 | tee stapler-app.log || true
+            grep -q "The validate action worked!" stapler-app.log && break
+            [ "$attempt" = 5 ] && { echo "::error::stapler validate failed after 5 attempts"; exit 1; }
+            echo "validate attempt $attempt failed; retrying in 20 s"; sleep 20
+          done
 
           shopt -s nullglob
           dmgs=(${{ matrix.bundle-dir }}/dmg/*.dmg)
