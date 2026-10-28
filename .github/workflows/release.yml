@@ -311,6 +311,37 @@ jobs:
           echo "$out"
           grep -q "libusb OK" <<<"$out" || { echo "::error::edl self-test did not find libusb"; exit 1; }
 
+      - name: Ensure the app is stapled
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          APP="${{ matrix.bundle-dir }}/macos/Inkroot.app"
+          [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
+          if xcrun stapler validate "$APP"; then
+            echo "app already stapled"
+          else
+            # Tauri's staple can run before Apple's ticket is available; retry (30 s x 20).
+            ok=0
+            for i in $(seq 1 20); do
+              if xcrun stapler staple "$APP" && xcrun stapler validate "$APP"; then ok=1; break; fi
+              echo "staple attempt $i failed; retrying in 30 s"
+              sleep 30
+            done
+            [ "$ok" = 1 ] || { echo "::error::could not staple $APP after ~10 minutes"; exit 1; }
+            # The DMG Tauri built holds the unstapled app; rebuild it from the stapled one.
+            shopt -s nullglob
+            dmgs=(${{ matrix.bundle-dir }}/dmg/*.dmg)
+            [ "${#dmgs[@]}" = 1 ] || { echo "::error::expected 1 DMG, found ${#dmgs[@]}: ${dmgs[*]}"; exit 1; }
+            DMG="${dmgs[0]}"
+            stage="$(mktemp -d)"
+            ditto "$APP" "$stage/Inkroot.app"
+            ln -s /Applications "$stage/Applications"
+            rm -f "$DMG"
+            hdiutil create -volname Inkroot -srcfolder "$stage" -ov -format UDZO "$DMG"
+            rm -rf "$stage"
+            echo "rebuilt $DMG from the stapled app"
+          fi
+
       - name: Verify signatures & notarization
         if: runner.os == 'macOS'
         env:
@@ -360,7 +391,13 @@ jobs:
             [ -n "$id" ] && xcrun notarytool log "$id" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID"
             echo "::error::DMG notarization was not accepted"; exit 1
           }
-          xcrun stapler staple "$DMG"
+          ok=0
+          for i in $(seq 1 20); do
+            if xcrun stapler staple "$DMG" && xcrun stapler validate "$DMG"; then ok=1; break; fi
+            echo "DMG staple attempt $i failed; retrying in 30 s"
+            sleep 30
+          done
+          [ "$ok" = 1 ] || { echo "::error::could not staple $DMG after ~10 minutes"; exit 1; }
           spctl --assess --type open --context context:primary-signature -vv "$DMG" 2>&1 | tee spctl-dmg.log
           grep -q "accepted" spctl-dmg.log
 
