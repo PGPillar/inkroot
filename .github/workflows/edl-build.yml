@@ -1,0 +1,63 @@
+name: edl-build
+
+# The release workflow's build-edl matrix, without signing or releasing: builds the frozen edl
+# on every OS and runs its self-test ("libusb OK …") and `edl --help`, so edl packaging changes
+# can be checked on Windows and Linux without cutting a tag.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - tools/build_edl.py
+      - tools/edl/edl.spec
+      - tools/edl/rthook_libusb.py
+      - tools/edl/edl_entry.py
+      - tools/edl/requirements-build.txt
+      - tools/binaries.lock.json
+      - .github/workflows/edl-build.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edl-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-edl:
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: darwin-aarch64
+          - os: macos-15-intel
+            target: darwin-x86_64
+          - os: windows-latest
+            target: windows-x86_64
+          # ubuntu-22.04 sets the glibc floor for the AppImage.
+          - os: ubuntu-22.04
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+      # Builds the onedir and runs its self-test ("libusb OK …") and `edl --help`.
+      - run: python -I tools/build_edl.py --target ${{ matrix.target }}
+      # Artifacts drop exec bits and symlinks, so the onedir travels as a tar.
+      - name: Pack edl build
+        run: tar -C tools/.build -cf tools/.build/edl-${{ matrix.target }}.tar ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edl-${{ matrix.target }}
+          path: tools/.build/edl-${{ matrix.target }}.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
