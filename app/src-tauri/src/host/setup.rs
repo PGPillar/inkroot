@@ -18,6 +18,61 @@ pub trait HostSetup: Send + Sync {
     fn install_udev(&self) -> Result<(), FlowError>;
 }
 
+/// The display name wdi-simple gives the EDL driver.
+pub const EDL_DRIVER_NAME: &str = "Qualcomm HS-USB QDLoader 9008";
+
+/// wdi-simple's argv for the WinUSB EDL driver. `dest` is a fresh writable folder for the
+/// driver files: without `--dest` wdi-simple fails to extract them ("Could not allocate
+/// resource", exit -11).
+pub fn wdi_args(dest: &Path) -> Vec<String> {
+    vec![
+        "--vid".into(),
+        "0x05C6".into(),
+        "--pid".into(),
+        "0x9008".into(),
+        "--type".into(),
+        "0".into(),
+        "--name".into(),
+        EDL_DRIVER_NAME.into(),
+        "--dest".into(),
+        dest.display().to_string(),
+    ]
+}
+
+/// Joins argv into one Windows command line (ShellExecuteExW `lpParameters`), quoting with the
+/// MSVCRT rules: an argument with spaces, tabs or quotes is wrapped in quotes, inner quotes are
+/// escaped and the backslashes before them (or before the closing quote) doubled.
+pub fn windows_command_line(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+                return a.clone();
+            }
+            let mut out = String::from("\"");
+            let mut slashes = 0usize;
+            for c in a.chars() {
+                match c {
+                    '\\' => slashes += 1,
+                    '"' => {
+                        out.push_str(&"\\".repeat(slashes * 2 + 1));
+                        out.push('"');
+                        slashes = 0;
+                    }
+                    _ => {
+                        out.push_str(&"\\".repeat(slashes));
+                        out.push(c);
+                        slashes = 0;
+                    }
+                }
+            }
+            out.push_str(&"\\".repeat(slashes * 2));
+            out.push('"');
+            out
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn driver_is_winusb(driver: Option<&str>) -> bool {
     driver.is_some_and(|d| d.eq_ignore_ascii_case("winusb"))
 }
@@ -93,11 +148,17 @@ impl HostSetup for WindowsSetup {
             s.encode_wide().chain(std::iter::once(0)).collect()
         }
 
+        // A fresh, writable folder for the driver files (removed when this returns; by then
+        // the driver is in the Windows driver store).
+        let dest = tempfile::Builder::new()
+            .prefix("inkroot_usb_driver")
+            .tempdir()
+            .map_err(|e| driver_missing(format!("temp folder for the driver: {e}")))?;
         let file = wide(self.wdi.as_os_str());
         let verb = wide(std::ffi::OsStr::new("runas"));
-        let params = wide(std::ffi::OsStr::new(
-            "--vid 0x05C6 --pid 0x9008 --type 0 --name \"Qualcomm HS-USB QDLoader 9008\"",
-        ));
+        let params = wide(std::ffi::OsStr::new(&windows_command_line(&wdi_args(
+            dest.path(),
+        ))));
         let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
         info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
         info.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -212,6 +273,40 @@ mod tests {
         assert!(!driver_is_winusb(Some("usbser")));
         assert!(driver_is_winusb(Some("WinUSB")));
         assert!(driver_is_winusb(Some("winusb")));
+    }
+
+    #[test]
+    fn wdi_argv_always_has_a_dest_folder() {
+        let dest = Path::new(r"C:\Users\Ann Lee\AppData\Local\Temp\inkroot_usb_driverX1");
+        assert_eq!(
+            wdi_args(dest),
+            [
+                "--vid",
+                "0x05C6",
+                "--pid",
+                "0x9008",
+                "--type",
+                "0",
+                "--name",
+                "Qualcomm HS-USB QDLoader 9008",
+                "--dest",
+                r"C:\Users\Ann Lee\AppData\Local\Temp\inkroot_usb_driverX1",
+            ]
+        );
+        assert_eq!(
+            windows_command_line(&wdi_args(dest)),
+            r#"--vid 0x05C6 --pid 0x9008 --type 0 --name "Qualcomm HS-USB QDLoader 9008" --dest "C:\Users\Ann Lee\AppData\Local\Temp\inkroot_usb_driverX1""#
+        );
+    }
+
+    #[test]
+    fn command_line_quoting() {
+        let q =
+            |v: &[&str]| windows_command_line(&v.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert_eq!(q(&["a", "b c", ""]), r#"a "b c" """#);
+        assert_eq!(q(&[r"C:\a b\"]), r#""C:\a b\\""#);
+        assert_eq!(q(&[r#"say "hi""#]), r#""say \"hi\"""#);
+        assert_eq!(q(&[r"C:\plain\dir"]), r"C:\plain\dir");
     }
 
     #[test]
