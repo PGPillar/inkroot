@@ -43,7 +43,7 @@ test('main-path copy has no jargon', () => {
 });
 describe('voice anchors', () => {
   test('anchors', () => {
-    expect(STEP_COPY.root.write!.body).toBe("The screen may stay blank. That's normal. Don't unplug it.");
+    expect(STEP_COPY.root.write!.body).toBe("The screen may stay blank, or keep showing the last thing it displayed. That's normal. Don't unplug it.");
     expect(GATE_COPY.unknownModel.heading).toBe('Inkroot only supports the BOOX Note Max right now.');
     expect(RISK_COPY.checkbox).toBe("I understand and accept these risks; I'm responsible for my device");
   });
@@ -72,7 +72,7 @@ test('rescue ending copy', () => {
   });
   expect(RESCUE_DONE.notSeen.heading).toBe('Written and checked ✓');
   expect(RESCUE_DONE.notSeen.body).toBe(
-    "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
+    "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for up to 30 seconds until it restarts, or run Rescue again. Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal.",
   );
   expect(RESCUE_DONE.notSeen.note).toMatch(/USB debugging is off/);
   expect(PROMPT_COPY.tabletStarting.options.homeScreen).toBe(RESCUE_WAIT.done);

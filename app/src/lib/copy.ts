@@ -54,7 +54,7 @@ const REBOOT: StepCopy = {
 };
 const WRITE: StepCopy = {
   heading: 'Writing to your tablet',
-  body: "The screen may stay blank. That's normal. Don't unplug it.",
+  body: "The screen may stay blank, or keep showing the last thing it displayed. That's normal. Don't unplug it.",
   tech: 'edl --memory=ufs w boot_{slot}',
 };
 const VERIFY_WRITE: StepCopy = {
@@ -70,7 +70,7 @@ export const STEP_COPY: Record<FlowKind, Partial<Record<StepId, StepCopy>>> = {
     checkDevice: CHECK,
     enterEdl: {
       heading: 'Getting your tablet ready',
-      body: "Your tablet will restart into a special mode. The screen may go blank. That's normal.",
+      body: "Your tablet will restart into a special mode. The screen may go blank, or keep showing the last thing it displayed. That's normal.",
       tech: 'adb reboot edl → waiting for USB 05c6:9008',
     },
     readPartitions: {
@@ -107,7 +107,7 @@ export const STEP_COPY: Record<FlowKind, Partial<Record<StepId, StepCopy>>> = {
     checkDevice: CHECK,
     enterEdl: {
       heading: 'Getting your tablet ready',
-      body: "Your tablet will restart into a special mode. The screen may stay blank. That's normal. Don't unplug it.",
+      body: "Your tablet will restart into a special mode. The screen may stay blank, or keep showing the last thing it displayed. That's normal. Don't unplug it.",
       tech: 'adb reboot edl → 05c6:9008',
     },
     readPartitions: {
@@ -161,12 +161,12 @@ export const STEP_COPY: Record<FlowKind, Partial<Record<StepId, StepCopy>>> = {
     checkDevice: CHECK,
     enterEdl: {
       heading: 'Getting your tablet ready',
-      body: "Your tablet will restart into a special mode. The screen may stay blank. That's normal. Don't unplug it.",
+      body: "Your tablet will restart into a special mode. The screen may stay blank, or keep showing the last thing it displayed. That's normal. Don't unplug it.",
       tech: 'adb reboot edl → 05c6:9008',
     },
     write: {
       heading: 'Putting the original back',
-      body: "The screen may stay blank. That's normal. Don't unplug it.",
+      body: "The screen may stay blank, or keep showing the last thing it displayed. That's normal. Don't unplug it.",
       tech: 'edl --memory=ufs w boot_{slot} (stock)',
     },
     verifyWrite: VERIFY_WRITE,
@@ -219,7 +219,7 @@ export const DONE_COPY: Record<FlowKind, StepCopy & { checks?: string[] }> = {
   },
   rescue: {
     heading: 'Written and checked ✓',
-    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
+    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for up to 30 seconds until it restarts, or run Rescue again. Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal.",
   },
   unroot: {
     heading: 'Your Note Max is back to stock.',
@@ -281,12 +281,12 @@ export const RESCUE_DONE = {
   },
   notSeen: {
     heading: 'Written and checked ✓',
-    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for 10 seconds, or run Rescue again.",
+    body: "Your tablet should be starting up now. Once you see its home screen, you're done. If it's still on the ONYX logo after 5 minutes, hold the power button for up to 30 seconds until it restarts, or run Rescue again. Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal.",
     note: "Inkroot can't see your tablet when USB debugging is off, which is common after a rescue. That's okay.",
   },
   backInEdl: {
     heading: 'Your tablet went back to rescue mode',
-    body: "We wrote your safety copy and checked it, but your tablet restarted into rescue mode instead of starting up. Hold the power button for 10 seconds to restart it. If it lands in rescue mode again, run Rescue again with a different saved copy.",
+    body: "We wrote your safety copy and checked it, but your tablet restarted into rescue mode instead of starting up. Hold the power button for up to 30 seconds until it restarts. Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal. If it lands in rescue mode again, run Rescue again with a different saved copy.",
   },
   rooted: "It's rooted.",
   notRooted: "It's not rooted.",
@@ -338,8 +338,8 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     bullets: [
       "Check it's the deep-flash cable, not a normal one.",
       'Use a USB-A port on the computer itself, not an adapter or hub.',
-      'Try again and keep holding the cable button a bit longer, about 15 seconds after the screen goes blank.',
-      "A black screen is normal. Your tablet isn't broken.",
+      'Try again and keep holding the cable button a bit longer, about 15 seconds. The screen might not change.',
+      "A black screen, or a screen stuck on the last thing it showed, is normal. E-ink keeps its picture even in rescue mode.",
     ],
     options: { retry: 'Try again', cancel: 'Stop' },
   },
@@ -354,7 +354,7 @@ export const PROMPT_COPY: Record<PromptKind, PromptCopy> = {
     heading: 'Your tablet is still in rescue mode',
     body: "Nothing is wrong with it. Inkroot asked it to restart a few times, but it stayed where it was. You can restart it yourself.",
     bullets: [
-      'Hold the power button for about 10 seconds, until the screen changes.',
+      'Hold the power button for up to 30 seconds until it restarts. The screen might not change until it does.',
       "Then let go and choose “I've restarted it”.",
       'Or choose “Try restarting again” to let Inkroot have another go.',
     ],
@@ -452,7 +452,7 @@ export const GATE_COPY: Record<GateId, GateCopy> = {
   edl: {
     label: 'Rescue mode',
     heading: 'Your tablet is in rescue mode',
-    body: "It's connected in a special mode used for repairs. If it's stuck, Rescue can put a good copy back.",
+    body: "It's connected in a special mode used for repairs. Its screen may still show the last thing it displayed, which is normal for e-ink. If it's stuck, Rescue can put a good copy back.",
     primary: 'Rescue my tablet',
   },
   unknownModel: {
@@ -543,7 +543,7 @@ export interface CableStep {
 }
 export const CABLE_GUIDE_LABEL = 'Step {i} of 4 · Cable · {p} of 6';
 export const CABLE_GUIDE_FOOT = {
-  reassurance: "A black screen is normal. Your tablet isn't broken, and this is fixable.",
+  reassurance: "Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal, and your tablet isn't broken.",
   waiting: 'Waiting for your tablet…',
   found: 'Found it ✓',
 } as const;
@@ -577,7 +577,7 @@ export const CABLE_GUIDE: CableStep[] = [
   },
   {
     id: 'c5', heading: 'Hold the power button for 15 seconds',
-    body: 'Keep holding both buttons until the screen goes completely blank, about 15 seconds.',
+    body: "Keep holding both buttons for about 15 seconds. The screen might not change. E-ink keeps showing the last thing it displayed, and that's normal.",
     art: 'Tablet power button + PressIndicator', secondary: 'Start a 15 s timer', next: 'Next',
   },
   {

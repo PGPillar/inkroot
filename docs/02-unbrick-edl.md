@@ -56,7 +56,7 @@ don't have to supply one.
   1. Plug the cable's **USB-A end into the host's native USB-A port**.
   2. Hold the cable's button (the D+/GND short).
   3. Plug the USB-C end into the tablet.
-  4. Hold the tablet's **power button ~15 s** until the screen goes fully blank.
+  4. Hold the tablet's **power button ~15 s**. The screen might not change.
   5. Keep the cable button held **~10 more s**, then release.
 
 Confirm the host sees it:
@@ -103,7 +103,7 @@ edl reset
 ```
 
 Then **unplug the deep-flash cable**, put the tablet on its **normal charger**, and hold power
-~5 s. It should boot the restored system.
+for up to 30 s until it restarts. It should boot the restored system.
 
 There's a small wrapper in [`scripts/edl-restore.sh`](../scripts/edl-restore.sh) that runs the
 write + verify + reset for you.
@@ -114,6 +114,7 @@ write + verify + reset for you.
   starts. A stuck `edl` that can't reach the device will **peg a CPU core at 100 %** — kill it with
   `pkill -9 -f edl`.
 - **Native USB-A only** (repeated because it cost us hours): USB-C adapters silently fail.
+- **E-ink keeps its picture.** In EDL, or powered off, the screen may still show the last thing it displayed. That's normal.
 - **Don't panic at a black screen.** After a bad `boot` flash the device looks dead; it's still
   reachable over EDL with the cable. A brick here is a soft brick.
 - Keep the EDL tool + your stock `boot` image together and offline — that's the entire rescue kit.

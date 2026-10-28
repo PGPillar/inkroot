@@ -189,7 +189,7 @@ describe('flow screen', () => {
     await until(hasHeading('Do you have a rescue cable?'), 'cable check');
     await click('Yes, I have one');
     await until(hasHeading('Your tablet is still in rescue mode'), 'still in rescue mode');
-    expect(screen.getByText(/Hold the power button for about 10 seconds/)).toBeVisible();
+    expect(screen.getByText(/Hold the power button for up to 30 seconds/)).toBeVisible();
     expect(button('Try restarting again')).toBeVisible();
     await click("I've restarted it");
     await until(hasHeading('Your Note Max is rooted.'), 'done');
@@ -252,7 +252,7 @@ describe('flow screen', () => {
     expect(heading('You need a deep-flash cable')).toBeVisible();
     expect(screen.getByText('Step 2 of 4 · Cable · 1 of 6')).toBeVisible();
     expect(screen.getByText('Waiting for your tablet…')).toBeVisible();
-    expect(screen.getByText("A black screen is normal. Your tablet isn't broken, and this is fixable.")).toBeVisible();
+    expect(screen.getByText("Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal, and your tablet isn't broken.")).toBeVisible();
     x.emit.device!({ kind: 'edl' });
     await vi.advanceTimersByTimeAsync(1);
     expect(screen.getByText('Found it ✓')).toBeVisible();
@@ -315,7 +315,7 @@ describe('flow screen', () => {
     expect(screen.getByText("Check it's the deep-flash cable, not a normal one.")).toBeVisible();
     expect(screen.getByText(/Use a USB-A port on the computer itself/)).toBeVisible();
     expect(screen.getByText('Waiting for your tablet…')).toBeVisible();
-    expect(screen.getByText("A black screen is normal. Your tablet isn't broken, and this is fixable.")).toBeVisible();
+    expect(screen.getByText("Your screen may still show the last thing it displayed. E-ink keeps its picture even when the tablet is off or in rescue mode. That's normal, and your tablet isn't broken.")).toBeVisible();
     await click('Try again');
     await vi.advanceTimersByTimeAsync(1);
     // Back on the guide, from holding the cable's button again.
@@ -398,7 +398,7 @@ describe('flow screen', () => {
     const x = await setup('rescue-back-in-edl');
     await x.app.startJob('rescue', { backupId: STOCK_BACKUP.id });
     await until(hasHeading('Your tablet went back to rescue mode'), 'back in edl');
-    expect(screen.getByText(/Hold the power button for 10 seconds/)).toBeVisible();
+    expect(screen.getByText(/Hold the power button for up to 30 seconds/)).toBeVisible();
     await click('Run Rescue again');
     expect(x.app.flow).toBeNull();
     expect(x.app.route.screen).toBe('rescuePick');
