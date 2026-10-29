@@ -28,3 +28,6 @@ app/src-tauri/target/
 app/src-tauri/gen/
 # Playwright/UI test output
 app/test-results/
+
+# written by the edl tool when run from the repo root
+edl_config.json

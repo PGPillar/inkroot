@@ -207,6 +207,8 @@ firmware 4.2, where fastboot was removed. The guides and scripts behind it are a
 Scripts: [`scripts/patch-boot.sh`](scripts/patch-boot.sh) (patch `boot` with Magisk, verity kept
 on) · [`scripts/edl-restore.sh`](scripts/edl-restore.sh) (write a `boot` image back over EDL).
 
+Want to work on Inkroot itself? See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the repo layout, build, test and release.
+
 ### Device this was verified on
 
 | | |
