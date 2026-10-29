@@ -16,8 +16,8 @@ the logo, and puts it back to stock — on Mac, Windows and Linux, without a ter
 
 ## Download
 
-**Beta — not yet hardware-verified.** Inkroot hasn't been tested end-to-end on a real tablet yet,
-so expect rough edges — and keep your safety copy.
+**Tested on real hardware.** Inkroot has been tested end-to-end on a real Note Max (firmware 4.2)
+on macOS, Windows and Linux. Keep your safety copy somewhere safe all the same.
 
 | Your computer | Download |
 |---|---|
